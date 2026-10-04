@@ -22,6 +22,7 @@ object DiagnosticExport {
         appendLine("    \"backgroundConnectionSupported\": false")
         appendLine("  },")
         appendLine("  \"deviceDetails\": {")
+        appendLine("    \"deviceVersion\": ${(state.deviceDetails.firmware ?: state.deviceDetails.software).jsonOrNull()},")
         appendLine("    \"manufacturer\": ${state.deviceDetails.manufacturer.jsonOrNull()},")
         appendLine("    \"model\": ${state.deviceDetails.model.jsonOrNull()},")
         appendLine("    \"firmware\": ${state.deviceDetails.firmware.jsonOrNull()},")

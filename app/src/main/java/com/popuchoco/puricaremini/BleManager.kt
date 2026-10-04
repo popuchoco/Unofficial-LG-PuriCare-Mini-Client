@@ -93,13 +93,21 @@ class BleManager(private val context: Context) {
                     enqueue { g.readCharacteristic(battery) }
                 }
                 val deviceInfo = g.getService(PuriCareProtocol.DEVICE_INFORMATION_SERVICE)
+                if (deviceInfo == null) log("Device information service not provided")
                 listOf(
                     PuriCareProtocol.MANUFACTURER_NAME,
                     PuriCareProtocol.MODEL_NUMBER,
                     PuriCareProtocol.FIRMWARE_REVISION,
                     PuriCareProtocol.HARDWARE_REVISION,
                     PuriCareProtocol.SOFTWARE_REVISION,
-                ).forEach { uuid -> deviceInfo?.getCharacteristic(uuid)?.let { characteristic -> enqueue { g.readCharacteristic(characteristic) } } }
+                ).forEach { uuid ->
+                    val characteristic = deviceInfo?.getCharacteristic(uuid)
+                    if (deviceInfo != null && characteristic == null) {
+                        log("Device info ${deviceInfoLabel(uuid)} not provided")
+                    } else if (characteristic != null) {
+                        enqueue { g.readCharacteristic(characteristic) }
+                    }
+                }
                 handler.postDelayed({ refresh() }, 900)
             }
         }
@@ -115,12 +123,14 @@ class BleManager(private val context: Context) {
 
         override fun onCharacteristicRead(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) handleValue(characteristic.uuid, value)
+            else handler.post { log("Read ${deviceInfoLabel(characteristic.uuid)} failed status=$status") }
             completeOperation()
         }
 
         @Deprecated("Legacy callback for Android 12")
         override fun onCharacteristicRead(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) handleValue(characteristic.uuid, characteristic.value ?: byteArrayOf())
+            else handler.post { log("Read ${deviceInfoLabel(characteristic.uuid)} failed status=$status") }
             completeOperation()
         }
 
@@ -208,11 +218,11 @@ class BleManager(private val context: Context) {
     private fun handleValue(uuid: java.util.UUID, bytes: ByteArray) = handler.post {
         val text = bytes.toString(Charsets.UTF_8).trim('\u0000', ' ')
         when (uuid) {
-            PuriCareProtocol.MANUFACTURER_NAME -> state = state.copy(deviceDetails = state.deviceDetails.copy(manufacturer = text))
-            PuriCareProtocol.MODEL_NUMBER -> state = state.copy(deviceDetails = state.deviceDetails.copy(model = text))
-            PuriCareProtocol.FIRMWARE_REVISION -> state = state.copy(deviceDetails = state.deviceDetails.copy(firmware = text))
-            PuriCareProtocol.HARDWARE_REVISION -> state = state.copy(deviceDetails = state.deviceDetails.copy(hardware = text))
-            PuriCareProtocol.SOFTWARE_REVISION -> state = state.copy(deviceDetails = state.deviceDetails.copy(software = text))
+            PuriCareProtocol.MANUFACTURER_NAME -> updateDeviceInfo("Manufacturer", text) { copy(manufacturer = it) }
+            PuriCareProtocol.MODEL_NUMBER -> updateDeviceInfo("Model", text) { copy(model = it) }
+            PuriCareProtocol.FIRMWARE_REVISION -> updateDeviceInfo("Firmware", text) { copy(firmware = it) }
+            PuriCareProtocol.HARDWARE_REVISION -> updateDeviceInfo("Hardware", text) { copy(hardware = it) }
+            PuriCareProtocol.SOFTWARE_REVISION -> updateDeviceInfo("Software", text) { copy(software = it) }
             PuriCareProtocol.BATTERY_LEVEL -> if (bytes.isNotEmpty()) {
             state = state.copy(snapshot = state.snapshot.copy(battery = bytes[0].toInt() and 0xff, updatedAt = System.currentTimeMillis()))
             log("Battery ${bytes[0].toInt() and 0xff}%")
@@ -223,6 +233,22 @@ class BleManager(private val context: Context) {
             log("RX ${PuriCareProtocol.hex(bytes)}${if (decoded.isEmpty()) "" else " → " + decoded.joinToString { "${it.id}=${it.value}" }}")
             }
         }
+    }
+
+    private fun updateDeviceInfo(label: String, text: String, update: DeviceDetails.(String?) -> DeviceDetails) {
+        val value = text.ifBlank { null }
+        state = state.copy(deviceDetails = state.deviceDetails.update(value))
+        log("Device info $label=${value ?: "empty"}")
+    }
+
+    private fun deviceInfoLabel(uuid: java.util.UUID): String = when (uuid) {
+        PuriCareProtocol.MANUFACTURER_NAME -> "Manufacturer"
+        PuriCareProtocol.MODEL_NUMBER -> "Model"
+        PuriCareProtocol.FIRMWARE_REVISION -> "Firmware"
+        PuriCareProtocol.HARDWARE_REVISION -> "Hardware"
+        PuriCareProtocol.SOFTWARE_REVISION -> "Software"
+        PuriCareProtocol.BATTERY_LEVEL -> "Battery"
+        else -> uuid.toString()
     }
 
     private fun log(message: String) {

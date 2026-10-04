@@ -132,13 +132,13 @@ private fun Header(state: BleUiState) {
     ) {
         Column(Modifier.weight(1f)) {
             Text("PURICARE MINI", fontSize = 12.sp, letterSpacing = 1.8.sp, color = Muted)
-            Text("我的空氣", fontSize = 25.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+            Text("我的空氣", fontSize = 25.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
         }
         Surface(shape = RoundedCornerShape(50), color = if (state.connected) TealSoft else Color(0xFFE8ECE9)) {
             Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(8.dp).background(if (state.connected) Teal else Muted, CircleShape))
                 Spacer(Modifier.width(8.dp))
-                Text(if (state.connected) "已連線" else "離線", fontSize = 13.sp, color = Ink)
+                Text(if (state.connected) "已連線" else "離線", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
             }
         }
     }
@@ -203,7 +203,7 @@ private fun AirReading(snapshot: AirSnapshot) {
             }
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.Bottom) {
-                Text(pm?.toString() ?: "—", fontSize = 64.sp, lineHeight = 68.sp, fontWeight = FontWeight.Light, color = Ink)
+                Text(pm?.toString() ?: "—", fontSize = 64.sp, lineHeight = 68.sp, fontWeight = FontWeight.Light, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(Modifier.width(8.dp))
                 Text("µg/m³", color = Muted, modifier = Modifier.padding(bottom = 10.dp))
             }
@@ -395,6 +395,7 @@ private fun InfoScreen(state: BleUiState, appTheme: AppTheme, onThemeChange: (Ap
             InfoRow("名稱", state.deviceName.orUnavailable())
             InfoRow("製造商", state.deviceDetails.manufacturer.orUnavailable())
             InfoRow("型號", state.deviceDetails.model.orUnavailable())
+            InfoRow("裝置版本", (state.deviceDetails.firmware ?: state.deviceDetails.software).orUnavailable())
             InfoRow("Firmware", state.deviceDetails.firmware.orUnavailable())
             InfoRow("Hardware", state.deviceDetails.hardware.orUnavailable())
             InfoRow("Software", state.deviceDetails.software.orUnavailable())

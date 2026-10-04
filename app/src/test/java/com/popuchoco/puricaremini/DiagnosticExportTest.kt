@@ -22,6 +22,7 @@ class DiagnosticExportTest {
         assertTrue(json.contains("\"fan\": 8"))
         assertTrue(json.contains("\"turbo\": false"))
         assertTrue(json.contains("\"firmware\": \"1.2.3\""))
+        assertTrue(json.contains("\"deviceVersion\": \"1.2.3\""))
         assertTrue(json.contains("\"backgroundConnectionSupported\": false"))
         assertTrue(json.contains("PuriCare \\\"Mini\\\""))
         assertTrue(json.contains("RX 04 54"))
@@ -32,5 +33,12 @@ class DiagnosticExportTest {
         val json = DiagnosticExport.toJson(BleUiState(), "now", "test", "test")
         assertTrue(json.contains("\"pm25\": null"))
         assertTrue(json.contains("\"deviceName\": null"))
+    }
+
+    @Test fun exportUsesSoftwareAsDeviceVersionWhenFirmwareIsUnavailable() {
+        val state = BleUiState(deviceDetails = DeviceDetails(software = "1.0.4"))
+        val json = DiagnosticExport.toJson(state, "now", "test", "test")
+        assertTrue(json.contains("\"deviceVersion\": \"1.0.4\""))
+        assertTrue(json.contains("\"firmware\": null"))
     }
 }

@@ -28,7 +28,7 @@ SET 命令送出後約 750 ms 再發送 GET ALL。畫面最終以裝置回報為
 
 ## DD-007：裝置版本只讀標準欄位（採用）
 
-依序讀取 Device Information service 的製造商、型號、Firmware、Hardware 與 Software revision。缺少 characteristic 時顯示「裝置未提供」，不組合或猜測版本。
+依序讀取 Device Information service 的製造商、型號、Firmware、Hardware 與 Software revision。缺少 characteristic 時顯示「裝置未提供」。另提供「裝置版本」摘要：優先顯示 Firmware，裝置只提供 Software 時則顯示 Software；原始欄位仍分開保留，不猜測缺少的版本。
 
 ## DD-008：外觀設定保存在 App 私有偏好（採用）
 
@@ -41,4 +41,3 @@ SET 命令送出後約 750 ms 再發送 GET ALL。畫面最終以裝置回報為
 ## DD-010：高風險命令不納入第一版（採用）
 
 濾網重設、Firmware 寫入及其他無法輕易復原的操作不提供 UI，也不由一般狀態流程觸發。
-
