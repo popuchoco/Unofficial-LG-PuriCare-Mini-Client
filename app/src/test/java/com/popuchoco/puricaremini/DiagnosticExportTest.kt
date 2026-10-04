@@ -15,14 +15,22 @@ class DiagnosticExportTest {
             logs = listOf("12:00:01  RX 04 54", "12:00:00  TX GET ALL"),
         )
 
-        val json = DiagnosticExport.toJson(state, "2026-10-04T12:00:02+08:00", "0.1.0", "Android 15 (API 35)")
+        val json = DiagnosticExport.toJson(
+            state,
+            "2026-10-04T12:00:02+08:00",
+            "0.1.0",
+            "Android 15 (API 35)",
+            backgroundConnectionActive = true,
+        )
 
         assertTrue(json.contains("\"connected\": true"))
         assertTrue(json.contains("\"pm25\": 12"))
         assertTrue(json.contains("\"fan\": 8"))
         assertTrue(json.contains("\"turbo\": false"))
         assertTrue(json.contains("\"deviceVersion\": \"1.2.3\""))
-        assertTrue(json.contains("\"backgroundConnectionSupported\": false"))
+        assertTrue(json.contains("\"backgroundConnectionSupported\": true"))
+        assertTrue(json.contains("\"backgroundConnectionActive\": true"))
+        assertTrue(json.contains("\"proximityAutoPowerActive\": false"))
         assertTrue(json.contains("PuriCare \\\"Mini\\\""))
         assertTrue(json.contains("RX 04 54"))
         assertFalse(json.contains("kotlin."))

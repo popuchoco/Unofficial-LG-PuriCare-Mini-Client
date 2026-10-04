@@ -9,6 +9,9 @@
 - 搜尋、連接及重新整理 PuriCare Mini 狀態
 - 顯示 PM1.0、PM2.5、PM10、電量與濾網剩餘時數
 - 顯示目前風量，並可選擇 Auto、Turbo 或代表性手動段數
+- 空氣品質感測器可選擇「當產品開啟時」或「始終開啟」
+- 支援背景連線，並可設定依 Bluetooth 距離自動開關
+- 背景連線與依距離自動開關互斥，開啟其中一項會關閉另一項
 - 控制電源與顯示燈；關閉電源前會再次確認
 - 「資訊」頁顯示連線能力、裝置名稱與裝置實際提供的版本
 - 跟隨系統、淺色及深色三種外觀模式
@@ -16,7 +19,9 @@
 
 ## 背景連線
 
-目前版本尚未提供持續背景連線。離開 App 或系統回收程序後，Bluetooth 連線可能中斷；App 會在「資訊」頁如實顯示這項能力。
+背景連線使用 Android Foreground Service 與常駐通知維持 BLE，連線中斷後會嘗試重新連接上次裝置。不同手機的省電策略仍可能中止服務。
+
+依距離自動開關需要讓 Bluetooth 連線隨手機與產品的距離改變，因此不能與背景連線同時使用；App 以單一模式設定保證兩者互斥。
 
 裝置若未提供版本欄位，對應內容會顯示「裝置未提供」。
 
@@ -25,7 +30,6 @@
 需要 JDK 17、Android SDK 35、Gradle 8.9、Android Gradle Plugin 8.7.2 與 Kotlin 2.0.21。
 
 ```powershell
-cd PuriCareMiniNext
 .\gradlew.bat testDebugUnitTest assembleDebug --no-daemon
 ```
 
@@ -36,6 +40,7 @@ cd PuriCareMiniNext
 - [系統架構](docs/ARCHITECTURE.md)
 - [設計決策](docs/DESIGN_DECISIONS.md)
 - [Software Design（SD）](docs/SOFTWARE_DESIGN.md)
+- [功能相容性對照](docs/FEATURE_COMPATIBILITY.md)
 - [BLE 通訊筆記](docs/PROTOCOL.md)
 
 ## 使用

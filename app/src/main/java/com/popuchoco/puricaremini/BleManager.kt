@@ -7,6 +7,7 @@ import android.bluetooth.le.ScanResult
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.os.Build
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -37,38 +38,57 @@ class BleManager(private val context: Context) {
     private val handler = Handler(Looper.getMainLooper())
     private val adapter = context.getSystemService(BluetoothManager::class.java).adapter
     private var gatt: BluetoothGatt? = null
+    private var lastCandidate: DeviceCandidate? = null
+    private var backgroundConnectionEnabled = false
+    private var manualDisconnect = false
+    private val refreshAfterControl = Runnable { if (state.connected) refresh() }
     private val queue = ArrayDeque<() -> Unit>()
     private var operationRunning = false
+    private var operationToken = 0
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
-            val device = result.device
-            val name = result.scanRecord?.deviceName ?: runCatching { device.name }.getOrNull() ?: "未命名 BLE 裝置"
-            val likely = name.contains("Puri", true) || name.contains("LG", true) || name.contains("Mini", true)
-            val candidate = DeviceCandidate(name, device.address, result.rssi, likely)
-            val updated = (state.candidates.filterNot { it.address == candidate.address } + candidate)
-                .sortedWith(compareByDescending<DeviceCandidate> { it.likely }.thenByDescending { it.rssi })
-                .take(30)
-            state = state.copy(candidates = updated)
+            handler.post {
+                val device = result.device
+                val name = result.scanRecord?.deviceName ?: runCatching { device.name }.getOrNull() ?: "未命名 BLE 裝置"
+                val likely = name.contains("Puri", true) || name.contains("LG", true)
+                val candidate = DeviceCandidate(name, device.address, result.rssi, likely)
+                val updated = (state.candidates.filterNot { it.address == candidate.address } + candidate)
+                    .sortedWith(compareByDescending<DeviceCandidate> { it.likely }.thenByDescending { it.rssi })
+                    .take(30)
+                state = state.copy(candidates = updated)
+            }
         }
 
         override fun onScanFailed(errorCode: Int) {
-            state = state.copy(scanning = false, phase = "掃描失敗（$errorCode）")
-            log("SCAN failed code=$errorCode")
+            handler.post {
+                state = state.copy(scanning = false, phase = "掃描失敗（$errorCode）")
+                log("SCAN failed code=$errorCode")
+            }
         }
     }
 
     private val callback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
             handler.post {
+                if (g !== gatt) {
+                    if (newState == BluetoothProfile.STATE_DISCONNECTED) g.close()
+                    return@post
+                }
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
                     state = state.copy(phase = "正在讀取服務…", connected = false, deviceName = runCatching { g.device.name }.getOrNull())
                     log("GATT connected; discovering services")
                     handler.postDelayed({ g.discoverServices() }, 400)
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                     operationRunning = false; queue.clear()
-                    state = state.copy(phase = "連線已中斷", connected = false)
+                    operationToken++
+                    g.close()
+                    gatt = null
+                    state = state.copy(phase = if (status == BluetoothGatt.GATT_SUCCESS) "連線已中斷" else "連線錯誤（$status）", connected = false)
                     log("GATT disconnected status=$status")
+                    if (backgroundConnectionEnabled && !manualDisconnect) {
+                        handler.postDelayed({ lastCandidate?.let(::connect) }, 3_000)
+                    }
                 }
             }
         }
@@ -82,9 +102,9 @@ class BleManager(private val context: Context) {
                     log("Unsupported GATT. Services: $services")
                     return@post
                 }
+                if (!enableNotifications(g, uart.getCharacteristic(PuriCareProtocol.UART_RX))) return@post
                 state = state.copy(phase = "已連線", connected = true)
                 log("PuriCare UART service ready")
-                enableNotifications(g, uart.getCharacteristic(PuriCareProtocol.UART_RX))
                 g.getService(PuriCareProtocol.BATTERY_SERVICE)?.getCharacteristic(PuriCareProtocol.BATTERY_LEVEL)?.let { battery ->
                     enqueue { g.readCharacteristic(battery) }
                 }
@@ -127,7 +147,11 @@ class BleManager(private val context: Context) {
         }
 
         override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
-            handler.post { log("Notifications ${if (status == 0) "enabled" else "failed ($status)"}"); completeOperation() }
+            handler.post {
+                log("Notifications ${if (status == 0) "enabled" else "failed ($status)"}")
+                if (status != BluetoothGatt.GATT_SUCCESS) state = state.copy(phase = "無法訂閱裝置通知", connected = false)
+                completeOperation()
+            }
         }
     }
 
@@ -146,29 +170,61 @@ class BleManager(private val context: Context) {
     }
 
     fun connect(candidate: DeviceCandidate) {
-        stopScan(); disconnect()
+        stopScan()
+        if (gatt != null) {
+            disconnect()
+            handler.postDelayed({ startConnection(candidate) }, 500)
+        } else {
+            startConnection(candidate)
+        }
+    }
+
+    private fun startConnection(candidate: DeviceCandidate) {
+        manualDisconnect = false
+        lastCandidate = candidate
+        context.getSharedPreferences("ble_device", Context.MODE_PRIVATE).edit()
+            .putString("address", candidate.address)
+            .putString("name", candidate.name)
+            .apply()
         state = state.copy(phase = "正在連線 ${candidate.name}…", deviceName = candidate.name, deviceDetails = DeviceDetails())
         log("Connecting ${candidate.name} (${candidate.address.take(8)}•••)")
         gatt = adapter.getRemoteDevice(candidate.address).connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
     }
 
     fun disconnect() {
-        operationRunning = false; queue.clear()
-        gatt?.disconnect(); gatt?.close(); gatt = null
+        manualDisconnect = true
+        operationRunning = false; operationToken++; queue.clear()
+        gatt?.disconnect()
         state = state.copy(connected = false)
     }
 
     fun refresh() = write(PuriCareProtocol.getAll(), "GET ALL")
     fun setPower(on: Boolean) = writeAndRefresh(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_POWER, on), "POWER ${if (on) "ON" else "OFF"}")
     fun setAuto(on: Boolean) = writeAndRefresh(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_AUTO, on), "AUTO ${if (on) "ON" else "OFF"}")
+    fun setSensorMonitoring(alwaysOn: Boolean) = writeAndRefresh(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_MONITORING, alwaysOn), "SENSOR ${if (alwaysOn) "ALWAYS" else "NORMAL"}")
     fun setLight(on: Boolean) = writeAndRefresh(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_LIGHT, on), "LIGHT ${if (on) "ON" else "OFF"}")
     fun setFan(level: Int) = writeAndRefresh(PuriCareProtocol.setByte(PuriCareProtocol.ID_FAN, level), "FAN $level")
     fun setFanAuto() = writeAndRefresh(PuriCareProtocol.setByte(PuriCareProtocol.ID_FAN, 8), "FAN AUTO")
     fun setTurbo(on: Boolean) = writeAndRefresh(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_TURBO, on), "TURBO ${if (on) "ON" else "OFF"}")
 
+    fun setBackgroundConnectionEnabled(enabled: Boolean) {
+        backgroundConnectionEnabled = enabled
+        if (enabled) manualDisconnect = false
+        log("Background connection ${if (enabled) "enabled" else "disabled"}")
+    }
+
+    fun resumeSavedConnection() {
+        if (state.connected || gatt != null) return
+        val preferences = context.getSharedPreferences("ble_device", Context.MODE_PRIVATE)
+        val address = preferences.getString("address", null) ?: return
+        val name = preferences.getString("name", null) ?: "PuriCare Mini"
+        connect(DeviceCandidate(name, address, 0, true))
+    }
+
     private fun writeAndRefresh(bytes: ByteArray, label: String) {
         write(bytes, label)
-        handler.postDelayed({ if (state.connected) refresh() }, 750)
+        handler.removeCallbacks(refreshAfterControl)
+        handler.postDelayed(refreshAfterControl, 750)
     }
 
     private fun write(bytes: ByteArray, label: String) {
@@ -176,18 +232,49 @@ class BleManager(private val context: Context) {
         val tx = g.getService(PuriCareProtocol.UART_SERVICE)?.getCharacteristic(PuriCareProtocol.UART_TX) ?: return
         enqueue {
             log("TX $label: ${PuriCareProtocol.hex(bytes)}")
-            val result = g.writeCharacteristic(tx, bytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
-            if (result != BluetoothStatusCodes.SUCCESS) completeOperation()
+            val started = if (Build.VERSION.SDK_INT >= 33) {
+                g.writeCharacteristic(tx, bytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothStatusCodes.SUCCESS
+            } else {
+                @Suppress("DEPRECATION")
+                tx.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                @Suppress("DEPRECATION")
+                tx.value = bytes
+                @Suppress("DEPRECATION")
+                g.writeCharacteristic(tx)
+            }
+            if (!started) { log("TX could not start"); completeOperation() }
         }
     }
 
-    private fun enableNotifications(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic?) {
-        if (characteristic == null || !g.setCharacteristicNotification(characteristic, true)) return
-        val descriptor = characteristic.getDescriptor(PuriCareProtocol.CCCD) ?: return
-        enqueue {
-            val result = g.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
-            if (result != BluetoothStatusCodes.SUCCESS) completeOperation()
+    private fun enableNotifications(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic?): Boolean {
+        if (characteristic == null) {
+            log("Notification characteristic not provided")
+            state = state.copy(phase = "找不到裝置通知通道", connected = false)
+            return false
         }
+        if (!g.setCharacteristicNotification(characteristic, true)) {
+            log("Local notification registration failed")
+            state = state.copy(phase = "無法啟用裝置通知", connected = false)
+            return false
+        }
+        val descriptor = characteristic.getDescriptor(PuriCareProtocol.CCCD)
+        if (descriptor == null) {
+            log("Notification descriptor not provided")
+            state = state.copy(phase = "找不到通知描述元", connected = false)
+            return false
+        }
+        enqueue {
+            val started = if (Build.VERSION.SDK_INT >= 33) {
+                g.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) == BluetoothStatusCodes.SUCCESS
+            } else {
+                @Suppress("DEPRECATION")
+                descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                @Suppress("DEPRECATION")
+                g.writeDescriptor(descriptor)
+            }
+            if (!started) { log("Notification write could not start"); completeOperation() }
+        }
+        return true
     }
 
     private fun enqueue(action: () -> Unit) {
@@ -198,10 +285,20 @@ class BleManager(private val context: Context) {
     private fun runNext() {
         if (queue.isEmpty()) { operationRunning = false; return }
         val next = queue.removeFirst()
-        operationRunning = true; next()
+        operationRunning = true
+        val token = ++operationToken
+        next()
+        handler.postDelayed({
+            if (operationRunning && token == operationToken) {
+                log("GATT operation timed out")
+                operationRunning = false
+                operationToken++
+                runNext()
+            }
+        }, 4_000)
     }
 
-    private fun completeOperation() = handler.post { operationRunning = false; runNext() }
+    private fun completeOperation() = handler.post { operationRunning = false; operationToken++; runNext() }
 
     private fun handleValue(uuid: java.util.UUID, bytes: ByteArray) = handler.post {
         val text = bytes.toString(Charsets.UTF_8).trim('\u0000', ' ')

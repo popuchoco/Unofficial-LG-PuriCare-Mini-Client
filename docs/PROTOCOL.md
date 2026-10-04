@@ -42,14 +42,14 @@
 | 501 | `IDU_GET_ALL` | 讀取全部狀態 |
 | 503 | `IDU_ON_OFF` | 電源 |
 | 506 | `IDU_WIND_SETTING` | 風量 |
-| 531 | `IDU_AUTO_ON_OFF` | 自動模式 |
+| 531 | `IDU_AUTO_ON_OFF` | 自動開關 bitfield；`0=關`、`1=Bluetooth 距離`、`2=充電線供電`、`3=兩者`。本 App 只提供 `0/1` |
 | 590 | `IDU_LIGHT` | 顯示燈 |
 | 623 | `IDU_BATTERY_STATUS` | 電池 |
 | 701 | `IDU_RESET_FILTER` | 重設濾網（本 App 不實作） |
 | 819 | `IDU_PM_1_SENSOR` | PM1.0 |
 | 820 | `IDU_PM_2_SENSOR` | PM2.5 |
 | 821 | `IDU_PM_10_SENSOR` | PM10 |
-| 823 | `SENSOR_MONITORING` | 監測設定 |
+| 823 | `SENSOR_MONITORING` | 空氣品質感測器 timing；`0=當產品開啟時`、`1=始終開啟` |
 | 853 | `IDU_FILTER_REMAIN_TIME` | 濾網剩餘 |
 | 863 | `IDU_WIND_SETTING_TURBO` | Turbo |
 

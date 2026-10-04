@@ -16,6 +16,7 @@ PuriCare Mini Next 在 Android 12 以上裝置直接透過 Bluetooth Low Energy 
 └──────────────────┘                      │ - frame codec            │
                                           │ - immutable UI snapshot  │
                                           │ - information exporter   │
+                                          │ - foreground service     │
                                           └──────────────────────────┘
 ```
 
@@ -39,6 +40,12 @@ Android GATT 的 descriptor、characteristic read 與 write 都是非同步操�
 
 「資訊」頁保留最近 500 筆連線記錄，並由使用者主動匯出 JSON。匯出內容包含 App／Android 版本、連線狀態、裝置資訊、目前快照及附近候選裝置；App 不會自動上傳。
 
+### Background connection
+
+使用 Android Foreground Service 與低干擾常駐通知保留共用 `BleManager`。意外斷線後等待三秒，再嘗試連接 App 私有設定中的上次裝置；使用者主動中斷時不重連。
+
+背景連線與依 Bluetooth 距離自動開關採單一 `ConnectionMode` 保存，因此不可能同時啟用。切換到距離模式時停止背景服務；切換到背景模式時先關閉裝置端距離模式。
+
 ## 主要資料流
 
 ```text
@@ -55,8 +62,7 @@ Android GATT 的 descriptor、characteristic read 與 write 都是非同步操�
 
 ## 現行邊界
 
-- 沒有持續背景連線；離開 App 或程序被回收後，連線可能中斷。
+- 背景連線依賴 Foreground Service；各品牌省電策略仍可能中止程序。
 - 沒有本機歷史資料庫或雲端同步。
 - 不執行 Firmware 更新、濾網重設或其他難以回復的裝置操作。
 - 裝置資訊只讀取 Bluetooth SIG 標準欄位；裝置未提供時不推測內容。
-

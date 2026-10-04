@@ -6,6 +6,8 @@ object DiagnosticExport {
         generatedAt: String,
         appVersion: String,
         androidVersion: String,
+        backgroundConnectionActive: Boolean = false,
+        proximityAutoPowerActive: Boolean = false,
     ): String = buildString {
         appendLine("{")
         appendLine("  \"schemaVersion\": 1,")
@@ -19,7 +21,9 @@ object DiagnosticExport {
         appendLine("    \"deviceName\": ${state.deviceName.jsonOrNull()}")
         appendLine("  },")
         appendLine("  \"capabilities\": {")
-        appendLine("    \"backgroundConnectionSupported\": false")
+        appendLine("    \"backgroundConnectionSupported\": true,")
+        appendLine("    \"backgroundConnectionActive\": $backgroundConnectionActive,")
+        appendLine("    \"proximityAutoPowerActive\": $proximityAutoPowerActive")
         appendLine("  },")
         appendLine("  \"deviceDetails\": {")
         appendLine("    \"deviceVersion\": ${state.deviceDetails.version.jsonOrNull()}")
@@ -33,6 +37,7 @@ object DiagnosticExport {
         appendLine("    \"fan\": ${state.snapshot.fan.jsonNumber()},")
         appendLine("    \"turbo\": ${state.snapshot.turbo.jsonBoolean()},")
         appendLine("    \"auto\": ${state.snapshot.auto.jsonBoolean()},")
+        appendLine("    \"sensorAlwaysOn\": ${state.snapshot.sensorAlwaysOn.jsonBoolean()},")
         appendLine("    \"light\": ${state.snapshot.light.jsonBoolean()},")
         appendLine("    \"filterRemaining\": ${state.snapshot.filterRemaining.jsonNumber()},")
         appendLine("    \"updatedAtEpochMs\": ${state.snapshot.updatedAt.jsonNumber()}")

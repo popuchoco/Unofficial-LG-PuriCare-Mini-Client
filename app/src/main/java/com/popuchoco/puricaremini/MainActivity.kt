@@ -1,6 +1,7 @@
 package com.popuchoco.puricaremini
 
 import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
@@ -46,7 +47,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        ble = BleManager(applicationContext)
+        ble = (application as PuriCareApplication).ble
+        if (FeaturePreferences(this).backgroundConnection) BackgroundConnectionService.start(this)
         setContent {
             val preferences = remember { getSharedPreferences("appearance", MODE_PRIVATE) }
             var appTheme by remember {
@@ -62,7 +64,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        ble.disconnect()
+        if (!FeaturePreferences(this).backgroundConnection) ble.disconnect()
         super.onDestroy()
     }
 }
@@ -118,7 +120,7 @@ private fun PuriCareApp(ble: BleManager, appTheme: AppTheme, onThemeChange: (App
                 Tab.Device -> DeviceScreen(state, ble) {
                     permission.launch(arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT))
                 }
-                Tab.Info -> InfoScreen(state, appTheme, onThemeChange)
+                Tab.Info -> InfoScreen(state, ble, appTheme, onThemeChange)
             }
         }
     }
@@ -264,7 +266,7 @@ private fun ControlPanel(snapshot: AirSnapshot, ble: BleManager) {
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = snapshot.fan == 8, onClick = ble::setFanAuto, label = { Text("Auto") }, modifier = Modifier.weight(1f).height(48.dp))
-            FilterChip(selected = snapshot.turbo == true, onClick = { ble.setTurbo(true) }, label = { Text("Turbo") }, modifier = Modifier.weight(1f).height(48.dp))
+            FilterChip(selected = snapshot.turbo == true, onClick = { ble.setTurbo(snapshot.turbo != true) }, label = { Text("Turbo") }, modifier = Modifier.weight(1f).height(48.dp))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(1, 3, 5, 7).forEach { level ->
@@ -361,9 +363,34 @@ private fun DeviceRow(candidate: DeviceCandidate, onClick: () -> Unit) {
 }
 
 @Composable
-private fun InfoScreen(state: BleUiState, appTheme: AppTheme, onThemeChange: (AppTheme) -> Unit) {
+private fun InfoScreen(state: BleUiState, ble: BleManager, appTheme: AppTheme, onThemeChange: (AppTheme) -> Unit) {
     val context = LocalContext.current
+    val appVersion = remember {
+        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "unknown"
+    }
+    val featurePreferences = remember { FeaturePreferences(context) }
+    var backgroundConnection by remember { mutableStateOf(featurePreferences.backgroundConnection) }
+    var proximityAutoPower by remember { mutableStateOf(featurePreferences.proximityAutoPower) }
+    var sensorAlwaysOn by remember { mutableStateOf(featurePreferences.sensorAlwaysOn) }
+    var confirmSensorAlwaysOn by remember { mutableStateOf(false) }
     var pendingExport by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(state.snapshot.sensorAlwaysOn) {
+        state.snapshot.sensorAlwaysOn?.let {
+            sensorAlwaysOn = it
+            featurePreferences.setSensorAlwaysOn(it)
+        }
+    }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted || Build.VERSION.SDK_INT < 33) {
+            featurePreferences.setBackgroundConnection(true)
+            backgroundConnection = true
+            proximityAutoPower = false
+            if (state.connected) ble.setAuto(false)
+            BackgroundConnectionService.start(context)
+        } else {
+            Toast.makeText(context, "需要通知權限才能顯示背景連線狀態", Toast.LENGTH_LONG).show()
+        }
+    }
     val createDocument = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         val result = runCatching {
@@ -376,15 +403,66 @@ private fun InfoScreen(state: BleUiState, appTheme: AppTheme, onThemeChange: (Ap
     }
 
     fun exportInformation() {
-        val version = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "unknown"
         pendingExport = DiagnosticExport.toJson(
             state = state,
             generatedAt = OffsetDateTime.now().toString(),
-            appVersion = version,
+            appVersion = appVersion,
             androidVersion = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
+            backgroundConnectionActive = backgroundConnection,
+            proximityAutoPowerActive = proximityAutoPower,
         )
         val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.TAIWAN).format(Date())
         createDocument.launch("puricare-mini-information-$stamp.json")
+    }
+
+    fun enableBackgroundConnection() {
+        featurePreferences.setBackgroundConnection(true)
+        backgroundConnection = true
+        proximityAutoPower = false
+        if (state.connected) ble.setAuto(false)
+        BackgroundConnectionService.start(context)
+    }
+
+    fun changeBackgroundConnection(enabled: Boolean) {
+        if (!enabled) {
+            featurePreferences.setBackgroundConnection(false)
+            backgroundConnection = false
+            BackgroundConnectionService.stop(context)
+            return
+        }
+        if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            enableBackgroundConnection()
+        }
+    }
+
+    fun changeProximityAutoPower(enabled: Boolean) {
+        featurePreferences.setProximityAutoPower(enabled)
+        proximityAutoPower = enabled
+        if (enabled) {
+            backgroundConnection = false
+            BackgroundConnectionService.stop(context)
+            ble.setBackgroundConnectionEnabled(false)
+        }
+        if (state.connected) ble.setAuto(enabled)
+    }
+
+    if (confirmSensorAlwaysOn) {
+        AlertDialog(
+            onDismissRequest = { confirmSensorAlwaysOn = false },
+            title = { Text("持續開啟空氣品質感測器？") },
+            text = { Text("感測器將持續運作，可能增加電量消耗與運轉聲。") },
+            dismissButton = { TextButton(onClick = { confirmSensorAlwaysOn = false }) { Text("取消") } },
+            confirmButton = {
+                Button(onClick = {
+                    confirmSensorAlwaysOn = false
+                    sensorAlwaysOn = true
+                    featurePreferences.setSensorAlwaysOn(true)
+                    ble.setSensorMonitoring(true)
+                }) { Text("持續開啟") }
+            },
+        )
     }
 
     Column(
@@ -396,16 +474,54 @@ private fun InfoScreen(state: BleUiState, appTheme: AppTheme, onThemeChange: (Ap
         InfoCard("裝置資訊") {
             InfoRow("名稱", state.deviceName.orUnavailable())
             InfoRow("裝置版本", state.deviceDetails.version.orUnavailable())
+            InfoRow("App 版本", appVersion)
         }
 
         InfoCard("連線能力") {
             InfoRow("Bluetooth", if (state.connected) "已連線" else "未連線")
-            InfoRow("背景連線", "目前不支援")
+            SettingSwitch(
+                title = "背景連線",
+                description = "離開 App 後以常駐通知維持連線並在中斷後嘗試恢復。",
+                checked = backgroundConnection,
+                onCheckedChange = ::changeBackgroundConnection,
+            )
+            SettingSwitch(
+                title = "依距離自動開關",
+                description = "Bluetooth 連線狀態隨手機距離改變；與背景連線只能擇一。",
+                checked = proximityAutoPower,
+                enabled = state.connected,
+                onCheckedChange = ::changeProximityAutoPower,
+            )
             Text(
-                "離開 App 或系統回收程序後，連線可能中斷。",
+                "開啟其中一項會自動關閉另一項。不同手機的省電策略可能影響背景連線。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp,
             )
+        }
+
+        InfoCard("空氣品質感測器") {
+            Text("選擇空氣品質感測器運作的時機。", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+            FilterChip(
+                selected = !sensorAlwaysOn,
+                onClick = {
+                    sensorAlwaysOn = false
+                    featurePreferences.setSensorAlwaysOn(false)
+                    ble.setSensorMonitoring(false)
+                },
+                enabled = state.connected,
+                label = { Text("當產品開啟時") },
+                leadingIcon = if (!sensorAlwaysOn) {{ Icon(Icons.Outlined.Check, null, Modifier.size(18.dp)) }} else null,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            )
+            FilterChip(
+                selected = sensorAlwaysOn,
+                onClick = { confirmSensorAlwaysOn = true },
+                enabled = state.connected,
+                label = { Text("始終開啟") },
+                leadingIcon = if (sensorAlwaysOn) {{ Icon(Icons.Outlined.Check, null, Modifier.size(18.dp)) }} else null,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            )
+            Text("始終開啟會增加耗電與運轉聲。", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
         }
 
         InfoCard("外觀") {
@@ -464,6 +580,23 @@ private fun InfoRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
         Text(value, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun SettingSwitch(
+    title: String,
+    description: String,
+    checked: Boolean,
+    enabled: Boolean = true,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 64.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium)
+            Text(description, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, lineHeight = 17.sp)
+        }
+        Switch(checked = checked, enabled = enabled, onCheckedChange = onCheckedChange)
     }
 }
 

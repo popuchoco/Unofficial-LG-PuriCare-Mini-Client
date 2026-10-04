@@ -12,6 +12,8 @@ Android Client 負責 PuriCare Mini 的 BLE 搜尋、連線、即時狀態解碼
 | BLE session | `BleManager.kt` | 掃描、連線、服務探索、GATT queue、通知與控制 |
 | UI | `MainActivity.kt` | 三分頁導覽、狀態呈現、控制確認、外觀設定 |
 | Export | `DiagnosticExport.kt` | 產生具 schema version 的 JSON 資訊檔 |
+| Feature settings | `FeaturePreferences.kt` | 保存互斥連線模式與感測器 timing |
+| Background | `BackgroundConnectionService.kt` | 常駐通知、維持連線與恢復上次裝置 |
 | Unit tests | `app/src/test/...` | frame、CRC、實機 fixture、狀態合併與匯出格式 |
 
 ## 3. 狀態模型
@@ -35,7 +37,7 @@ Android Client 負責 PuriCare Mini 的 BLE 搜尋、連線、即時狀態解碼
 5. 啟用 RX notification，將後續 read 排入 FIFO。
 6. 讀取 Battery 與 Device Information 中實際存在的 characteristic。
 7. 發送 GET ALL，持續將 REPORT／ACK 合併到畫面狀態。
-8. Activity 結束時主動中斷並關閉 GATT。
+8. 未啟用背景模式時，Activity 結束會中斷 GATT；背景模式則交由 Foreground Service 持有。
 
 ## 5. GATT concurrency
 
@@ -75,6 +77,6 @@ JSON 使用 `schemaVersion`，未取得欄位輸出 `null`。匯出由 Android S
 
 ## 10. 未實作項目
 
-- 持續背景連線、自動重連與開機恢復。
+- 開機自動恢復背景服務。
 - 歷史資料庫、圖表與雲端同步。
 - Firmware 更新、濾網重設與裝置帳號功能。

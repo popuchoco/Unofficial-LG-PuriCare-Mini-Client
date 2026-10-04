@@ -62,6 +62,8 @@ object PuriCareProtocol {
     /** Decodes device reports. Known scalar values use a 10-bit ID + 2-bit length + 4-bit inline value. */
     fun decodeReport(packet: ByteArray): List<Reading> {
         if (packet.size < 11) return emptyList()
+        val expectedCrc = ((packet[packet.size - 2].toInt() and 0xff) shl 8) or (packet.last().toInt() and 0xff)
+        if (crc16(packet.copyOfRange(0, packet.size - 2)) != expectedCrc) return emptyList()
         val addressLength = packet[0].toInt() and 0xff
         if (addressLength <= 0 || packet.size < addressLength + 7) return emptyList()
         val address = packet.copyOfRange(1, 1 + addressLength).toString(Charsets.US_ASCII)
@@ -112,6 +114,7 @@ data class AirSnapshot(
     val fan: Int? = null,
     val turbo: Boolean? = null,
     val auto: Boolean? = null,
+    val sensorAlwaysOn: Boolean? = null,
     val light: Boolean? = null,
     val filterRemaining: Int? = null,
     val updatedAt: Long? = null,
@@ -129,6 +132,7 @@ fun AirSnapshot.with(readings: List<PuriCareProtocol.Reading>): AirSnapshot {
             PuriCareProtocol.ID_FAN -> next.copy(fan = reading.value)
             PuriCareProtocol.ID_TURBO -> next.copy(turbo = reading.value != 0)
             PuriCareProtocol.ID_AUTO -> next.copy(auto = reading.value != 0)
+            PuriCareProtocol.ID_MONITORING -> next.copy(sensorAlwaysOn = reading.value != 0)
             PuriCareProtocol.ID_LIGHT -> next.copy(light = reading.value != 0)
             PuriCareProtocol.ID_FILTER_REMAIN -> next.copy(filterRemaining = reading.value)
             else -> next
