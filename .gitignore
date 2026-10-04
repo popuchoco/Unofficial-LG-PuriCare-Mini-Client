@@ -21,4 +21,5 @@ Thumbs.db
 *.apk
 *.aab
 captures/
+feedback/
 *.log

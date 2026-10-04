@@ -55,23 +55,34 @@ object PuriCareProtocol {
 
     data class Reading(val id: Int, val value: Int)
 
-    /**
-     * Best-effort decoder for the original app's TOAD report format. Raw packets remain visible in Diagnostics.
-     * Known scalar values in LG reports are encoded after a 10-bit ID + 6-bit format/length header.
-     */
+    /** Decodes device reports. Known scalar values use a 10-bit ID + 2-bit length + 4-bit inline value. */
     fun decodeReport(packet: ByteArray): List<Reading> {
-        if (packet.size < 10 || packet[0].toInt() != 4 || packet.copyOfRange(1, 5).toString(Charsets.US_ASCII) != "TOAD") return emptyList()
-        val payloadLength = packet[7].toInt() and 0xff
-        val end = minOf(8 + payloadLength, packet.size - 2)
+        if (packet.size < 11) return emptyList()
+        val addressLength = packet[0].toInt() and 0xff
+        if (addressLength <= 0 || packet.size < addressLength + 7) return emptyList()
+        val address = packet.copyOfRange(1, 1 + addressLength).toString(Charsets.US_ASCII)
+        val headerStart = 1 + addressLength
+        val (messageTypeIndex, payloadLengthIndex, payloadStart) = when (address) {
+            // Device → client: protocol/version, message type, sequence, length, payload.
+            "TOAP" -> Triple(headerStart + 1, headerStart + 3, headerStart + 4)
+            // Client-shaped frame retained for fixtures and forward compatibility.
+            "TOAD" -> Triple(headerStart, headerStart + 2, headerStart + 3)
+            else -> return emptyList()
+        }
+        if (payloadStart > packet.size - 2 || payloadLengthIndex >= packet.size) return emptyList()
+        val messageType = packet[messageTypeIndex].toInt() and 0xff
+        if (messageType != 4 && messageType != 16) return emptyList()
+        val payloadLength = packet[payloadLengthIndex].toInt() and 0xff
+        val end = minOf(payloadStart + payloadLength, packet.size - 2)
         val result = mutableListOf<Reading>()
-        var index = 8
+        var index = payloadStart
         while (index + 1 < end) {
             val header = ((packet[index].toInt() and 0xff) shl 8) or (packet[index + 1].toInt() and 0xff)
             val id = header ushr 6
             val format = (header ushr 4) and 0x03
             val inline = header and 0x0f
             index += 2
-            val bytes = when (format) { 1 -> 2; 2 -> 4; 3 -> inline; else -> 0 }
+            val bytes = format
             val value = when {
                 bytes == 0 -> inline
                 index + bytes <= end -> {
