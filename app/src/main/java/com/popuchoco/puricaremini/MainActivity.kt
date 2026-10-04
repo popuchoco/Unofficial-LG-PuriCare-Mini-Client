@@ -1,7 +1,9 @@
 package com.popuchoco.puricaremini
 
 import android.Manifest
+import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -21,12 +23,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
+import java.time.OffsetDateTime
 import java.util.*
 
 private val Ink = Color(0xFF17211E)
@@ -306,10 +310,50 @@ private fun DeviceRow(candidate: DeviceCandidate, onClick: () -> Unit) {
 
 @Composable
 private fun DiagnosticsScreen(state: BleUiState) {
+    val context = LocalContext.current
+    var pendingExport by remember { mutableStateOf<String?>(null) }
+    val createDocument = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val result = runCatching {
+            context.contentResolver.openOutputStream(uri, "w")?.bufferedWriter(Charsets.UTF_8)?.use { writer ->
+                writer.write(pendingExport ?: error("沒有可匯出的診斷內容"))
+            } ?: error("無法開啟目的檔案")
+        }
+        Toast.makeText(
+            context,
+            if (result.isSuccess) "診斷紀錄已匯出" else "匯出失敗：${result.exceptionOrNull()?.message}",
+            Toast.LENGTH_LONG,
+        ).show()
+        pendingExport = null
+    }
+
+    fun exportDiagnostics() {
+        val version = runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull() ?: "unknown"
+        pendingExport = DiagnosticExport.toJson(
+            state = state,
+            generatedAt = OffsetDateTime.now().toString(),
+            appVersion = version,
+            androidVersion = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
+        )
+        val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.TAIWAN).format(Date())
+        createDocument.launch("puricare-mini-diagnostics-$stamp.json")
+    }
+
     Column(Modifier.fillMaxSize().padding(20.dp)) {
-        Text("BLE 診斷", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(6.dp))
-        Text("保留原始封包，方便比對不同韌體版本。", color = Muted)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("BLE 診斷", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(6.dp))
+                Text("保留最近 ${state.logs.size} 筆事件與原始封包。", color = Muted)
+            }
+            FilledTonalButton(onClick = ::exportDiagnostics) {
+                Icon(Icons.Outlined.FileDownload, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("匯出")
+            }
+        }
         Spacer(Modifier.height(16.dp))
         Surface(Modifier.fillMaxSize(), shape = RoundedCornerShape(16.dp), color = Color(0xFF101714)) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {

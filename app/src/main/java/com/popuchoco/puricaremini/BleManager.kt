@@ -195,6 +195,6 @@ class BleManager(private val context: Context) {
 
     private fun log(message: String) {
         val stamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.TAIWAN).format(java.util.Date())
-        state = state.copy(logs = (listOf("$stamp  $message") + state.logs).take(120))
+        state = state.copy(logs = (listOf("$stamp  $message") + state.logs).take(500))
     }
 }
