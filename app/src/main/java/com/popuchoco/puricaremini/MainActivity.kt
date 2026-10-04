@@ -73,13 +73,13 @@ private enum class AppTheme(val label: String) { SYSTEM("跟隨系統"), LIGHT("
 private fun PuriCareTheme(appTheme: AppTheme, content: @Composable () -> Unit) {
     val dark = appTheme == AppTheme.DARK || (appTheme == AppTheme.SYSTEM && isSystemInDarkTheme())
     val colors = if (dark) darkColorScheme(
-        primary = Color(0xFF69D7BF), onPrimary = Color(0xFF00382E), primaryContainer = Color(0xFF075044),
+        primary = Color(0xFF69D7BF), onPrimary = Color(0xFF00382E), primaryContainer = Color(0xFF075044), onPrimaryContainer = Color(0xFF9BF2DB),
         background = Color(0xFF101513), onBackground = Color(0xFFE1E9E4), surface = Color(0xFF171D1A),
-        onSurface = Color(0xFFE1E9E4), outline = Color(0xFF89938E), error = Color(0xFFFFB4AB)
+        onSurface = Color(0xFFE1E9E4), surfaceVariant = Color(0xFF3F4945), onSurfaceVariant = Color(0xFFBFC9C3), outline = Color(0xFF89938E), error = Color(0xFFFFB4AB)
     ) else lightColorScheme(
-        primary = Teal, onPrimary = Color.White, primaryContainer = TealSoft,
+        primary = Teal, onPrimary = Color.White, primaryContainer = TealSoft, onPrimaryContainer = Color(0xFF002019),
         background = Mist, onBackground = Ink, surface = Color(0xFFFAFCFA), onSurface = Ink,
-        outline = Line, error = Color(0xFFB3261E)
+        surfaceVariant = Color(0xFFE8ECE9), onSurfaceVariant = Muted, outline = Line, error = Color(0xFFB3261E)
     )
     MaterialTheme(colorScheme = colors, typography = Typography(), content = content)
 }
@@ -134,11 +134,13 @@ private fun Header(state: BleUiState) {
             Text("PURICARE MINI", fontSize = 12.sp, letterSpacing = 1.8.sp, color = Muted)
             Text("我的空氣", fontSize = 25.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
         }
-        Surface(shape = RoundedCornerShape(50), color = if (state.connected) TealSoft else Color(0xFFE8ECE9)) {
+        val statusContainer = if (state.connected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+        val statusContent = if (state.connected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+        Surface(shape = RoundedCornerShape(50), color = statusContainer) {
             Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(8.dp).background(if (state.connected) Teal else Muted, CircleShape))
+                Box(Modifier.size(8.dp).background(statusContent, CircleShape))
                 Spacer(Modifier.width(8.dp))
-                Text(if (state.connected) "已連線" else "離線", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                Text(if (state.connected) "已連線" else "離線", fontSize = 13.sp, color = statusContent)
             }
         }
     }
@@ -393,12 +395,7 @@ private fun InfoScreen(state: BleUiState, appTheme: AppTheme, onThemeChange: (Ap
 
         InfoCard("裝置資訊") {
             InfoRow("名稱", state.deviceName.orUnavailable())
-            InfoRow("製造商", state.deviceDetails.manufacturer.orUnavailable())
-            InfoRow("型號", state.deviceDetails.model.orUnavailable())
-            InfoRow("裝置版本", (state.deviceDetails.firmware ?: state.deviceDetails.software).orUnavailable())
-            InfoRow("Firmware", state.deviceDetails.firmware.orUnavailable())
-            InfoRow("Hardware", state.deviceDetails.hardware.orUnavailable())
-            InfoRow("Software", state.deviceDetails.software.orUnavailable())
+            InfoRow("裝置版本", state.deviceDetails.version.orUnavailable())
         }
 
         InfoCard("連線能力") {

@@ -21,7 +21,7 @@ Android Client 負責 PuriCare Mini 的 BLE 搜尋、連線、即時狀態解碼
 - `phase`、`scanning`、`connected`：連線流程及 UI 可用性。
 - `deviceName`、`candidates`：目前裝置與掃描候選。
 - `snapshot`：PM、電量、電源、風量、Turbo、顯示燈、濾網剩餘時數。
-- `deviceDetails`：製造商、型號、Firmware、Hardware、Software。
+- `deviceDetails`：裝置實際提供的版本字串。
 - `logs`：最新在前，最多 500 筆的連線記錄。
 
 目前狀態只存在程序記憶體；重新啟動 App 後需重新連線取得。

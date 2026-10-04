@@ -28,7 +28,7 @@ SET 命令送出後約 750 ms 再發送 GET ALL。畫面最終以裝置回報為
 
 ## DD-007：裝置版本只讀標準欄位（採用）
 
-依序讀取 Device Information service 的製造商、型號、Firmware、Hardware 與 Software revision。缺少 characteristic 時顯示「裝置未提供」。另提供「裝置版本」摘要：優先顯示 Firmware，裝置只提供 Software 時則顯示 Software；原始欄位仍分開保留，不猜測缺少的版本。
+實機只在 Device Information service 的 Software Revision 提供可信版本值，因此 App 僅讀取並顯示「裝置版本」。其他欄位不是未提供，就是內容與 Bluetooth SIG 欄位語意不符，不呈現在 UI 或匯出資料中；版本 characteristic 缺少時顯示「裝置未提供」。
 
 ## DD-008：外觀設定保存在 App 私有偏好（採用）
 

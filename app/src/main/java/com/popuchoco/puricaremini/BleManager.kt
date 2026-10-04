@@ -15,11 +15,7 @@ import java.util.ArrayDeque
 data class DeviceCandidate(val name: String, val address: String, val rssi: Int, val likely: Boolean)
 
 data class DeviceDetails(
-    val manufacturer: String? = null,
-    val model: String? = null,
-    val firmware: String? = null,
-    val hardware: String? = null,
-    val software: String? = null,
+    val version: String? = null,
 )
 
 data class BleUiState(
@@ -94,19 +90,11 @@ class BleManager(private val context: Context) {
                 }
                 val deviceInfo = g.getService(PuriCareProtocol.DEVICE_INFORMATION_SERVICE)
                 if (deviceInfo == null) log("Device information service not provided")
-                listOf(
-                    PuriCareProtocol.MANUFACTURER_NAME,
-                    PuriCareProtocol.MODEL_NUMBER,
-                    PuriCareProtocol.FIRMWARE_REVISION,
-                    PuriCareProtocol.HARDWARE_REVISION,
-                    PuriCareProtocol.SOFTWARE_REVISION,
-                ).forEach { uuid ->
-                    val characteristic = deviceInfo?.getCharacteristic(uuid)
-                    if (deviceInfo != null && characteristic == null) {
-                        log("Device info ${deviceInfoLabel(uuid)} not provided")
-                    } else if (characteristic != null) {
-                        enqueue { g.readCharacteristic(characteristic) }
-                    }
+                val version = deviceInfo?.getCharacteristic(PuriCareProtocol.SOFTWARE_REVISION)
+                if (deviceInfo != null && version == null) {
+                    log("Device version not provided")
+                } else if (version != null) {
+                    enqueue { g.readCharacteristic(version) }
                 }
                 handler.postDelayed({ refresh() }, 900)
             }
@@ -159,7 +147,7 @@ class BleManager(private val context: Context) {
 
     fun connect(candidate: DeviceCandidate) {
         stopScan(); disconnect()
-        state = state.copy(phase = "正在連線 ${candidate.name}…", deviceName = candidate.name)
+        state = state.copy(phase = "正在連線 ${candidate.name}…", deviceName = candidate.name, deviceDetails = DeviceDetails())
         log("Connecting ${candidate.name} (${candidate.address.take(8)}•••)")
         gatt = adapter.getRemoteDevice(candidate.address).connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
     }
@@ -218,11 +206,11 @@ class BleManager(private val context: Context) {
     private fun handleValue(uuid: java.util.UUID, bytes: ByteArray) = handler.post {
         val text = bytes.toString(Charsets.UTF_8).trim('\u0000', ' ')
         when (uuid) {
-            PuriCareProtocol.MANUFACTURER_NAME -> updateDeviceInfo("Manufacturer", text) { copy(manufacturer = it) }
-            PuriCareProtocol.MODEL_NUMBER -> updateDeviceInfo("Model", text) { copy(model = it) }
-            PuriCareProtocol.FIRMWARE_REVISION -> updateDeviceInfo("Firmware", text) { copy(firmware = it) }
-            PuriCareProtocol.HARDWARE_REVISION -> updateDeviceInfo("Hardware", text) { copy(hardware = it) }
-            PuriCareProtocol.SOFTWARE_REVISION -> updateDeviceInfo("Software", text) { copy(software = it) }
+            PuriCareProtocol.SOFTWARE_REVISION -> {
+                val version = text.ifBlank { null }
+                state = state.copy(deviceDetails = DeviceDetails(version))
+                log("Device version=${version ?: "empty"}")
+            }
             PuriCareProtocol.BATTERY_LEVEL -> if (bytes.isNotEmpty()) {
             state = state.copy(snapshot = state.snapshot.copy(battery = bytes[0].toInt() and 0xff, updatedAt = System.currentTimeMillis()))
             log("Battery ${bytes[0].toInt() and 0xff}%")
@@ -235,18 +223,8 @@ class BleManager(private val context: Context) {
         }
     }
 
-    private fun updateDeviceInfo(label: String, text: String, update: DeviceDetails.(String?) -> DeviceDetails) {
-        val value = text.ifBlank { null }
-        state = state.copy(deviceDetails = state.deviceDetails.update(value))
-        log("Device info $label=${value ?: "empty"}")
-    }
-
     private fun deviceInfoLabel(uuid: java.util.UUID): String = when (uuid) {
-        PuriCareProtocol.MANUFACTURER_NAME -> "Manufacturer"
-        PuriCareProtocol.MODEL_NUMBER -> "Model"
-        PuriCareProtocol.FIRMWARE_REVISION -> "Firmware"
-        PuriCareProtocol.HARDWARE_REVISION -> "Hardware"
-        PuriCareProtocol.SOFTWARE_REVISION -> "Software"
+        PuriCareProtocol.SOFTWARE_REVISION -> "Device version"
         PuriCareProtocol.BATTERY_LEVEL -> "Battery"
         else -> uuid.toString()
     }

@@ -11,7 +11,7 @@ class DiagnosticExportTest {
             connected = true,
             deviceName = "PuriCare \"Mini\"",
             snapshot = AirSnapshot(pm25 = 12, battery = 88, power = true, fan = 8, turbo = false),
-            deviceDetails = DeviceDetails(manufacturer = "LG", firmware = "1.2.3", hardware = "A1"),
+            deviceDetails = DeviceDetails(version = "1.2.3"),
             logs = listOf("12:00:01  RX 04 54", "12:00:00  TX GET ALL"),
         )
 
@@ -21,7 +21,6 @@ class DiagnosticExportTest {
         assertTrue(json.contains("\"pm25\": 12"))
         assertTrue(json.contains("\"fan\": 8"))
         assertTrue(json.contains("\"turbo\": false"))
-        assertTrue(json.contains("\"firmware\": \"1.2.3\""))
         assertTrue(json.contains("\"deviceVersion\": \"1.2.3\""))
         assertTrue(json.contains("\"backgroundConnectionSupported\": false"))
         assertTrue(json.contains("PuriCare \\\"Mini\\\""))
@@ -35,10 +34,13 @@ class DiagnosticExportTest {
         assertTrue(json.contains("\"deviceName\": null"))
     }
 
-    @Test fun exportUsesSoftwareAsDeviceVersionWhenFirmwareIsUnavailable() {
-        val state = BleUiState(deviceDetails = DeviceDetails(software = "1.0.4"))
+    @Test fun exportContainsOnlyUsefulDeviceVersionField() {
+        val state = BleUiState(deviceDetails = DeviceDetails(version = "1.0.4"))
         val json = DiagnosticExport.toJson(state, "now", "test", "test")
         assertTrue(json.contains("\"deviceVersion\": \"1.0.4\""))
-        assertTrue(json.contains("\"firmware\": null"))
+        assertFalse(json.contains("\"manufacturer\""))
+        assertFalse(json.contains("\"firmware\""))
+        assertFalse(json.contains("\"hardware\""))
+        assertFalse(json.contains("\"software\""))
     }
 }
