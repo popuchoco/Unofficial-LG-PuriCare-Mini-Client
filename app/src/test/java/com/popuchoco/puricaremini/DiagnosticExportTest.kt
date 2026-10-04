@@ -10,7 +10,8 @@ class DiagnosticExportTest {
             phase = "已連線",
             connected = true,
             deviceName = "PuriCare \"Mini\"",
-            snapshot = AirSnapshot(pm25 = 12, battery = 88, power = true),
+            snapshot = AirSnapshot(pm25 = 12, battery = 88, power = true, fan = 8, turbo = false),
+            deviceDetails = DeviceDetails(manufacturer = "LG", firmware = "1.2.3", hardware = "A1"),
             logs = listOf("12:00:01  RX 04 54", "12:00:00  TX GET ALL"),
         )
 
@@ -18,6 +19,10 @@ class DiagnosticExportTest {
 
         assertTrue(json.contains("\"connected\": true"))
         assertTrue(json.contains("\"pm25\": 12"))
+        assertTrue(json.contains("\"fan\": 8"))
+        assertTrue(json.contains("\"turbo\": false"))
+        assertTrue(json.contains("\"firmware\": \"1.2.3\""))
+        assertTrue(json.contains("\"backgroundConnectionSupported\": false"))
         assertTrue(json.contains("PuriCare \\\"Mini\\\""))
         assertTrue(json.contains("RX 04 54"))
         assertFalse(json.contains("kotlin."))

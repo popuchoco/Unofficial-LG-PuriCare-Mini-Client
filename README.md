@@ -1,53 +1,53 @@
 # PuriCare Mini Next
 
-為 LG PuriCare Mini 重製的非官方 Android 12+ 原生客戶端。App 直接透過 Bluetooth Low Energy 與機器通訊，不依賴已停止維護的 LG App、LG 帳號或雲端服務。
+適用於 LG PuriCare Mini 的非官方 Android 12+ 控制 App，以 Bluetooth Low Energy 直接連接附近裝置。
 
-> 本專案與 LG Electronics 無關。PuriCare 與相關商標屬其權利人所有。
+> 本專案與 LG Electronics 無關，PuriCare 為其商標。使用者應自行確認裝置保固與使用風險。
 
-## 目前可用功能
+## 功能
 
-- Android 12–15「附近裝置」權限流程，不要求 GPS 定位。
-- 掃描附近 BLE 裝置，將名稱疑似 PuriCare／LG 的候選排在前面。
-- 驗證裝置是否提供相容的 Nordic UART Service。
-- 訂閱即時通知並讀取標準 Battery Service。
-- 使用相容的 `TOAD` 通訊格式：更新全部狀態、電源、自動模式、顯示燈、風量與 Turbo。
-- 顯示 PM1.0、PM2.5、PM10、電池及濾網資訊；最近 500 筆事件與原始收發封包可在診斷頁匯出為 JSON。
-- Material 3 三分頁介面：總覽、裝置、診斷。
+- 搜尋、連接及重新整理 PuriCare Mini 狀態
+- 顯示 PM1.0、PM2.5、PM10、電量與濾網剩餘時數
+- 顯示目前風量，並可選擇 Auto、Turbo 或代表性手動段數
+- 控制電源與顯示燈；關閉電源前會再次確認
+- 「資訊」頁顯示連線能力、裝置名稱、型號、Firmware、Hardware 與 Software
+- 跟隨系統、淺色及深色三種外觀模式
+- 匯出最近 500 筆連線記錄及裝置狀態，方便回報問題
 
-## 專案結構
+## 背景連線
 
-```text
-PuriCareMiniNext/
-├── app/src/main/...              Android App
-├── app/src/test/...              協定單元測試
-├── docs/PROTOCOL.md              通訊相容性與協定邊界
-└── gradle/                       可重現建置 wrapper
-```
+目前版本尚未提供持續背景連線。離開 App 或系統回收程序後，Bluetooth 連線可能中斷；App 會在「資訊」頁如實顯示這項能力。
+
+裝置若未提供標準裝置資訊欄位，對應內容會顯示「裝置未提供」。
 
 ## 建置
 
-環境：JDK 17、Android SDK 35、Gradle 8.9、AGP 8.7.2、Kotlin 2.0.21。
+需要 JDK 17、Android SDK 35、Gradle 8.9、Android Gradle Plugin 8.7.2 與 Kotlin 2.0.21。
 
 ```powershell
 cd PuriCareMiniNext
 .\gradlew.bat testDebugUnitTest assembleDebug --no-daemon
 ```
 
-APK：`app\build\outputs\apk\debug\app-debug.apk`
+產物位於 `app\build\outputs\apk\debug\app-debug.apk`。
 
-## 實機驗證順序
+## 文件
 
-1. 關閉原生 LG App，確保沒有其他手機佔用裝置連線。
-2. 讓 PuriCare Mini 進入藍牙配對模式。
-3. 安裝 APK，允許「附近裝置」，到「裝置」分頁掃描。
-4. 優先選取標示「可能是 PuriCare」的候選。
-5. 連線後先按「更新裝置狀態」，確認診斷頁出現 `RX`。
-6. 先測試顯示燈或風量，再測試電源；若機型行為不同，保留診斷頁的 TX/RX 十六進位資料。
-7. 在「診斷」頁按「匯出」，將 JSON 紀錄存到手機後再提供給開發者分析。
+- [系統架構](docs/ARCHITECTURE.md)
+- [設計決策](docs/DESIGN_DECISIONS.md)
+- [Software Design（SD）](docs/SOFTWARE_DESIGN.md)
+- [BLE 通訊筆記](docs/PROTOCOL.md)
 
-## 已知邊界
+## 使用
 
-- UUID、TOAD 封裝、CRC、資料 ID 與控制入口已依既有裝置通訊行為完成相容實作，但尚未在你的實機韌體上完成閉環驗證。
-- 目前採保守的通用 scalar 解碼並保留 raw packet。不同韌體若採不同欄位長度，需以實機 RX 調整。
-- App 不提供韌體更新、不清除機器資料、不連線外部伺服器。
-- 目前是 alpha debug build，尚未建立正式簽署金鑰與 Play Store 發佈流程。
+1. 開啟 PuriCare Mini 並保持在手機附近。
+2. 安裝 APK，允許「附近裝置」權限。
+3. 在「裝置」頁搜尋並選擇 PuriCare Mini。
+4. 連線後可於「總覽」查看資料及操作裝置。
+5. 若需回報問題，可由「資訊」頁匯出資訊檔。
+
+## 注意事項
+
+- 本專案目前是 alpha debug build，尚未經 Google Play 發佈流程。
+- 各批次裝置可能不提供相同的標準資訊欄位。
+- App 不會上傳掃描結果、裝置資料或連線記錄。

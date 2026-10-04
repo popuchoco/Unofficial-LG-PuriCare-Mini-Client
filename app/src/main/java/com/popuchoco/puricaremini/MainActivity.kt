@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -46,7 +47,18 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ble = BleManager(applicationContext)
-        setContent { PuriCareTheme { PuriCareApp(ble) } }
+        setContent {
+            val preferences = remember { getSharedPreferences("appearance", MODE_PRIVATE) }
+            var appTheme by remember {
+                mutableStateOf(runCatching { AppTheme.valueOf(preferences.getString("theme", AppTheme.SYSTEM.name)!!) }.getOrDefault(AppTheme.SYSTEM))
+            }
+            PuriCareTheme(appTheme) {
+                PuriCareApp(ble, appTheme) { selected ->
+                    appTheme = selected
+                    preferences.edit().putString("theme", selected.name).apply()
+                }
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -55,9 +67,16 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private enum class AppTheme(val label: String) { SYSTEM("跟隨系統"), LIGHT("淺色"), DARK("深色") }
+
 @Composable
-private fun PuriCareTheme(content: @Composable () -> Unit) {
-    val colors = lightColorScheme(
+private fun PuriCareTheme(appTheme: AppTheme, content: @Composable () -> Unit) {
+    val dark = appTheme == AppTheme.DARK || (appTheme == AppTheme.SYSTEM && isSystemInDarkTheme())
+    val colors = if (dark) darkColorScheme(
+        primary = Color(0xFF69D7BF), onPrimary = Color(0xFF00382E), primaryContainer = Color(0xFF075044),
+        background = Color(0xFF101513), onBackground = Color(0xFFE1E9E4), surface = Color(0xFF171D1A),
+        onSurface = Color(0xFFE1E9E4), outline = Color(0xFF89938E), error = Color(0xFFFFB4AB)
+    ) else lightColorScheme(
         primary = Teal, onPrimary = Color.White, primaryContainer = TealSoft,
         background = Mist, onBackground = Ink, surface = Color(0xFFFAFCFA), onSurface = Ink,
         outline = Line, error = Color(0xFFB3261E)
@@ -66,11 +85,11 @@ private fun PuriCareTheme(content: @Composable () -> Unit) {
 }
 
 private enum class Tab(val label: String, val icon: ImageVector) {
-    Home("總覽", Icons.Outlined.Air), Device("裝置", Icons.Outlined.Bluetooth), Diagnostics("診斷", Icons.Outlined.Terminal)
+    Home("總覽", Icons.Outlined.Air), Device("裝置", Icons.Outlined.Bluetooth), Info("資訊", Icons.Outlined.Info)
 }
 
 @Composable
-private fun PuriCareApp(ble: BleManager) {
+private fun PuriCareApp(ble: BleManager, appTheme: AppTheme, onThemeChange: (AppTheme) -> Unit) {
     val state = ble.state
     var tab by remember { mutableStateOf(Tab.Home) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
@@ -78,15 +97,15 @@ private fun PuriCareApp(ble: BleManager) {
     }
 
     Scaffold(
-        containerColor = Mist,
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            NavigationBar(containerColor = Color(0xFFFAFCFA), tonalElevation = 0.dp) {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
                 Tab.entries.forEach { item ->
                     NavigationBarItem(
                         selected = tab == item, onClick = { tab = item },
                         icon = { Icon(item.icon, contentDescription = item.label) },
                         label = { Text(item.label) },
-                        colors = NavigationBarItemDefaults.colors(indicatorColor = TealSoft)
+                        colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primaryContainer)
                     )
                 }
             }
@@ -99,7 +118,7 @@ private fun PuriCareApp(ble: BleManager) {
                 Tab.Device -> DeviceScreen(state, ble) {
                     permission.launch(arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT))
                 }
-                Tab.Diagnostics -> DiagnosticsScreen(state)
+                Tab.Info -> InfoScreen(state, appTheme, onThemeChange)
             }
         }
     }
@@ -176,7 +195,7 @@ private fun AirReading(snapshot: AirSnapshot) {
         pm <= 35 -> Color(0xFFAE7800)
         else -> Color(0xFFB54A3B)
     }
-    Surface(shape = RoundedCornerShape(24.dp), color = Color(0xFFFAFCFA), border = androidx.compose.foundation.BorderStroke(1.dp, Line)) {
+    Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
         Column(Modifier.padding(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("PM2.5", color = Muted, fontSize = 14.sp, modifier = Modifier.weight(1f))
@@ -197,27 +216,58 @@ private fun AirReading(snapshot: AirSnapshot) {
 
 @Composable
 private fun ControlPanel(snapshot: AirSnapshot, ble: BleManager) {
+    var confirmPowerOff by remember { mutableStateOf(false) }
+
+    if (confirmPowerOff) {
+        AlertDialog(
+            onDismissRequest = { confirmPowerOff = false },
+            icon = { Icon(Icons.Outlined.PowerSettingsNew, contentDescription = null) },
+            title = { Text("確定關閉空氣清淨機？") },
+            text = { Text("關閉後可能無法再透過 App 開啟，需要按機身電源鍵才能重新啟動。") },
+            dismissButton = {
+                TextButton(onClick = { confirmPowerOff = false }) { Text("取消") }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        confirmPowerOff = false
+                        ble.setPower(false)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                ) { Text("關閉電源") }
+            },
+        )
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("控制", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-        Surface(shape = RoundedCornerShape(20.dp), color = Color(0xFFFAFCFA), border = androidx.compose.foundation.BorderStroke(1.dp, Line)) {
+        Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
             Column {
-                ControlSwitch(Icons.Outlined.PowerSettingsNew, "電源", snapshot.power == true) { ble.setPower(it) }
-                HorizontalDivider(Modifier.padding(start = 64.dp), color = Line)
-                ControlSwitch(Icons.Outlined.AutoAwesome, "自動模式", snapshot.auto == true) { ble.setAuto(it) }
+                ControlSwitch(Icons.Outlined.PowerSettingsNew, "電源", snapshot.power == true) { turnOn ->
+                    if (turnOn) ble.setPower(true) else confirmPowerOff = true
+                }
                 HorizontalDivider(Modifier.padding(start = 64.dp), color = Line)
                 ControlSwitch(Icons.Outlined.LightMode, "清淨顯示燈", snapshot.light == true) { ble.setLight(it) }
             }
         }
-        Text("風量", color = Muted, fontSize = 13.sp)
+        val currentFan = when {
+            snapshot.turbo == true -> "Turbo"
+            snapshot.fan == 8 -> "Auto"
+            snapshot.fan != null -> "第 ${snapshot.fan} 段"
+            else -> "等待狀態"
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("風量", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp, modifier = Modifier.weight(1f))
+            Text(currentFan, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(1 to "弱", 2 to "中", 3 to "強").forEach { (level, label) ->
-                FilterChip(
-                    selected = snapshot.fan == level, onClick = { ble.setFan(level) },
-                    label = { Text(label) }, modifier = Modifier.weight(1f).height(48.dp),
-                    leadingIcon = if (snapshot.fan == level) {{ Icon(Icons.Outlined.Check, null, Modifier.size(18.dp)) }} else null
-                )
+            FilterChip(selected = snapshot.fan == 8, onClick = ble::setFanAuto, label = { Text("Auto") }, modifier = Modifier.weight(1f).height(48.dp))
+            FilterChip(selected = snapshot.turbo == true, onClick = { ble.setTurbo(true) }, label = { Text("Turbo") }, modifier = Modifier.weight(1f).height(48.dp))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(1, 3, 5, 7).forEach { level ->
+                FilterChip(selected = snapshot.fan == level && snapshot.turbo != true, onClick = { ble.setFan(level) }, label = { Text(level.toString()) }, modifier = Modifier.weight(1f).height(48.dp))
             }
-            FilterChip(selected = snapshot.fan == 15, onClick = { ble.setTurbo(true) }, label = { Text("Turbo") }, modifier = Modifier.weight(1.2f).height(48.dp))
         }
     }
 }
@@ -242,14 +292,14 @@ private fun SnapshotGrid(snapshot: AirSnapshot) {
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Metric("電池", snapshot.battery?.toString() ?: "—", "%", Modifier.weight(1f))
-            Metric("濾網剩餘", snapshot.filterRemaining?.toString() ?: "—", "% / 小時", Modifier.weight(1f))
+            Metric("濾網剩餘", snapshot.filterRemaining?.toString() ?: "—", "小時", Modifier.weight(1f))
         }
     }
 }
 
 @Composable
 private fun Metric(label: String, value: String, unit: String, modifier: Modifier) {
-    Surface(modifier, shape = RoundedCornerShape(16.dp), color = Color(0xFFFAFCFA), border = androidx.compose.foundation.BorderStroke(1.dp, Line)) {
+    Surface(modifier, shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
         Column(Modifier.padding(16.dp)) {
             Text(label, color = Muted, fontSize = 13.sp)
             Spacer(Modifier.height(8.dp))
@@ -265,7 +315,7 @@ private fun DeviceScreen(state: BleUiState, ble: BleManager, requestScan: () -> 
         Text("裝置連線", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
         Text(state.phase, color = if (state.connected) Teal else Muted)
         if (state.connected) {
-            Surface(shape = RoundedCornerShape(20.dp), color = Color(0xFFFAFCFA), border = androidx.compose.foundation.BorderStroke(1.dp, Line)) {
+            Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                 Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.Air, null, tint = Teal, modifier = Modifier.size(36.dp))
                     Spacer(Modifier.width(16.dp))
@@ -295,7 +345,7 @@ private fun DeviceScreen(state: BleUiState, ble: BleManager, requestScan: () -> 
 
 @Composable
 private fun DeviceRow(candidate: DeviceCandidate, onClick: () -> Unit) {
-    Surface(Modifier.fillMaxWidth().clickable(onClick = onClick), shape = RoundedCornerShape(16.dp), color = Color(0xFFFAFCFA), border = androidx.compose.foundation.BorderStroke(1.dp, if (candidate.likely) Teal.copy(.45f) else Line)) {
+    Surface(Modifier.fillMaxWidth().clickable(onClick = onClick), shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface, border = androidx.compose.foundation.BorderStroke(1.dp, if (candidate.likely) MaterialTheme.colorScheme.primary.copy(.45f) else MaterialTheme.colorScheme.outlineVariant)) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.Bluetooth, null, tint = if (candidate.likely) Teal else Muted)
             Spacer(Modifier.width(14.dp))
@@ -307,6 +357,119 @@ private fun DeviceRow(candidate: DeviceCandidate, onClick: () -> Unit) {
         }
     }
 }
+
+@Composable
+private fun InfoScreen(state: BleUiState, appTheme: AppTheme, onThemeChange: (AppTheme) -> Unit) {
+    val context = LocalContext.current
+    var pendingExport by remember { mutableStateOf<String?>(null) }
+    val createDocument = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val result = runCatching {
+            context.contentResolver.openOutputStream(uri, "w")?.bufferedWriter(Charsets.UTF_8)?.use {
+                it.write(pendingExport ?: error("沒有可匯出的資訊"))
+            } ?: error("無法開啟輸出檔案")
+        }
+        Toast.makeText(context, if (result.isSuccess) "資訊檔已匯出" else "匯出失敗：${result.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+        pendingExport = null
+    }
+
+    fun exportInformation() {
+        val version = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "unknown"
+        pendingExport = DiagnosticExport.toJson(
+            state = state,
+            generatedAt = OffsetDateTime.now().toString(),
+            appVersion = version,
+            androidVersion = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
+        )
+        val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.TAIWAN).format(Date())
+        createDocument.launch("puricare-mini-information-$stamp.json")
+    }
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+        Text("資訊", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+
+        InfoCard("裝置資訊") {
+            InfoRow("名稱", state.deviceName.orUnavailable())
+            InfoRow("製造商", state.deviceDetails.manufacturer.orUnavailable())
+            InfoRow("型號", state.deviceDetails.model.orUnavailable())
+            InfoRow("Firmware", state.deviceDetails.firmware.orUnavailable())
+            InfoRow("Hardware", state.deviceDetails.hardware.orUnavailable())
+            InfoRow("Software", state.deviceDetails.software.orUnavailable())
+        }
+
+        InfoCard("連線能力") {
+            InfoRow("Bluetooth", if (state.connected) "已連線" else "未連線")
+            InfoRow("背景連線", "目前不支援")
+            Text(
+                "離開 App 或系統回收程序後，連線可能中斷。",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 13.sp,
+            )
+        }
+
+        InfoCard("外觀") {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AppTheme.entries.forEach { theme ->
+                    FilterChip(
+                        selected = appTheme == theme,
+                        onClick = { onThemeChange(theme) },
+                        label = { Text(theme.label) },
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    )
+                }
+            }
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("連線記錄", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Text("保留最近 ${state.logs.size} 筆", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+            }
+            FilledTonalButton(onClick = ::exportInformation) {
+                Icon(Icons.Outlined.FileDownload, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("匯出")
+            }
+        }
+        Surface(Modifier.fillMaxWidth().height(300.dp), shape = RoundedCornerShape(16.dp), color = Color(0xFF101714)) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+                if (state.logs.isEmpty()) Text("尚無記錄", color = Color(0xFF91A49C), fontFamily = FontFamily.Monospace)
+                state.logs.forEach {
+                    Text(it, color = Color(0xFFB9D4C9), fontSize = 11.sp, lineHeight = 17.sp, fontFamily = FontFamily.Monospace)
+                    Spacer(Modifier.height(5.dp))
+                }
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+    }
+}
+
+@Composable
+private fun InfoCard(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        ) {
+            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+        }
+    }
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+        Text(value, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium)
+    }
+}
+
+private fun String?.orUnavailable(): String = if (isNullOrBlank()) "裝置未提供" else this
 
 @Composable
 private fun DiagnosticsScreen(state: BleUiState) {

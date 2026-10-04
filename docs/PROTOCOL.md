@@ -21,11 +21,12 @@
 封包結構如下：
 
 ```text
-[04] [54 4F 41 44] [messageType] [00] [payloadLength] [payload...] [CRC16 BE]
+[04] [54 4F 41 44] [02] [messageType] [00] [payloadLength] [payload...] [CRC16 BE]
 ```
 
 - address 長度 `04`
 - address ASCII `TOAD`
+- protocol version：`02`
 - message type：`01=SET`、`02=GET`、`04=REPORT`、`10=ACK`
 - CRC：`C0820f.m5505M()`；結果以四位 hex 轉為兩個 big-endian bytes。
 
@@ -57,6 +58,6 @@
 現有相容性資料仍無法保證所有硬體 revision 都使用相同欄位長度或數值語義。因此本 App：
 
 - 不實作濾網重設或韌體寫入等難以回復操作。
-- 診斷頁保存每一筆 TX/RX raw hex。
+- 資訊頁保存每一筆 TX/RX raw hex，並可由使用者主動匯出。
 - 只有 service discovery 找到 Nordic UART Service 才啟用控制。
 - 實機驗證後應把收到的 REPORT fixture 加入單元測試，再收斂 decoder。

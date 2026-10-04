@@ -14,6 +14,14 @@ import java.util.ArrayDeque
 
 data class DeviceCandidate(val name: String, val address: String, val rssi: Int, val likely: Boolean)
 
+data class DeviceDetails(
+    val manufacturer: String? = null,
+    val model: String? = null,
+    val firmware: String? = null,
+    val hardware: String? = null,
+    val software: String? = null,
+)
+
 data class BleUiState(
     val phase: String = "尚未連線",
     val scanning: Boolean = false,
@@ -21,6 +29,7 @@ data class BleUiState(
     val deviceName: String? = null,
     val candidates: List<DeviceCandidate> = emptyList(),
     val snapshot: AirSnapshot = AirSnapshot(),
+    val deviceDetails: DeviceDetails = DeviceDetails(),
     val logs: List<String> = emptyList(),
 )
 
@@ -83,6 +92,14 @@ class BleManager(private val context: Context) {
                 g.getService(PuriCareProtocol.BATTERY_SERVICE)?.getCharacteristic(PuriCareProtocol.BATTERY_LEVEL)?.let { battery ->
                     enqueue { g.readCharacteristic(battery) }
                 }
+                val deviceInfo = g.getService(PuriCareProtocol.DEVICE_INFORMATION_SERVICE)
+                listOf(
+                    PuriCareProtocol.MANUFACTURER_NAME,
+                    PuriCareProtocol.MODEL_NUMBER,
+                    PuriCareProtocol.FIRMWARE_REVISION,
+                    PuriCareProtocol.HARDWARE_REVISION,
+                    PuriCareProtocol.SOFTWARE_REVISION,
+                ).forEach { uuid -> deviceInfo?.getCharacteristic(uuid)?.let { characteristic -> enqueue { g.readCharacteristic(characteristic) } } }
                 handler.postDelayed({ refresh() }, 900)
             }
         }
@@ -144,11 +161,17 @@ class BleManager(private val context: Context) {
     }
 
     fun refresh() = write(PuriCareProtocol.getAll(), "GET ALL")
-    fun setPower(on: Boolean) = write(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_POWER, on), "POWER ${if (on) "ON" else "OFF"}")
-    fun setAuto(on: Boolean) = write(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_AUTO, on), "AUTO ${if (on) "ON" else "OFF"}")
-    fun setLight(on: Boolean) = write(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_LIGHT, on), "LIGHT ${if (on) "ON" else "OFF"}")
-    fun setFan(level: Int) = write(PuriCareProtocol.setByte(PuriCareProtocol.ID_FAN, level), "FAN $level")
-    fun setTurbo(on: Boolean) = write(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_TURBO, on), "TURBO ${if (on) "ON" else "OFF"}")
+    fun setPower(on: Boolean) = writeAndRefresh(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_POWER, on), "POWER ${if (on) "ON" else "OFF"}")
+    fun setAuto(on: Boolean) = writeAndRefresh(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_AUTO, on), "AUTO ${if (on) "ON" else "OFF"}")
+    fun setLight(on: Boolean) = writeAndRefresh(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_LIGHT, on), "LIGHT ${if (on) "ON" else "OFF"}")
+    fun setFan(level: Int) = writeAndRefresh(PuriCareProtocol.setByte(PuriCareProtocol.ID_FAN, level), "FAN $level")
+    fun setFanAuto() = writeAndRefresh(PuriCareProtocol.setByte(PuriCareProtocol.ID_FAN, 8), "FAN AUTO")
+    fun setTurbo(on: Boolean) = writeAndRefresh(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_TURBO, on), "TURBO ${if (on) "ON" else "OFF"}")
+
+    private fun writeAndRefresh(bytes: ByteArray, label: String) {
+        write(bytes, label)
+        handler.postDelayed({ if (state.connected) refresh() }, 750)
+    }
 
     private fun write(bytes: ByteArray, label: String) {
         val g = gatt ?: return
@@ -183,13 +206,22 @@ class BleManager(private val context: Context) {
     private fun completeOperation() = handler.post { operationRunning = false; runNext() }
 
     private fun handleValue(uuid: java.util.UUID, bytes: ByteArray) = handler.post {
-        if (uuid == PuriCareProtocol.BATTERY_LEVEL && bytes.isNotEmpty()) {
+        val text = bytes.toString(Charsets.UTF_8).trim('\u0000', ' ')
+        when (uuid) {
+            PuriCareProtocol.MANUFACTURER_NAME -> state = state.copy(deviceDetails = state.deviceDetails.copy(manufacturer = text))
+            PuriCareProtocol.MODEL_NUMBER -> state = state.copy(deviceDetails = state.deviceDetails.copy(model = text))
+            PuriCareProtocol.FIRMWARE_REVISION -> state = state.copy(deviceDetails = state.deviceDetails.copy(firmware = text))
+            PuriCareProtocol.HARDWARE_REVISION -> state = state.copy(deviceDetails = state.deviceDetails.copy(hardware = text))
+            PuriCareProtocol.SOFTWARE_REVISION -> state = state.copy(deviceDetails = state.deviceDetails.copy(software = text))
+            PuriCareProtocol.BATTERY_LEVEL -> if (bytes.isNotEmpty()) {
             state = state.copy(snapshot = state.snapshot.copy(battery = bytes[0].toInt() and 0xff, updatedAt = System.currentTimeMillis()))
             log("Battery ${bytes[0].toInt() and 0xff}%")
-        } else {
+            }
+            else -> {
             val decoded = PuriCareProtocol.decodeReport(bytes)
             state = state.copy(snapshot = state.snapshot.with(decoded))
             log("RX ${PuriCareProtocol.hex(bytes)}${if (decoded.isEmpty()) "" else " → " + decoded.joinToString { "${it.id}=${it.value}" }}")
+            }
         }
     }
 

@@ -8,6 +8,12 @@ object PuriCareProtocol {
     val UART_RX: UUID = UUID.fromString("6a400003-b5a3-f393-e0a9-e50e24dcca9e")
     val BATTERY_SERVICE: UUID = UUID.fromString("0000180f-0000-1000-8000-00805f9b34fb")
     val BATTERY_LEVEL: UUID = UUID.fromString("00002a19-0000-1000-8000-00805f9b34fb")
+    val DEVICE_INFORMATION_SERVICE: UUID = UUID.fromString("0000180a-0000-1000-8000-00805f9b34fb")
+    val MANUFACTURER_NAME: UUID = UUID.fromString("00002a29-0000-1000-8000-00805f9b34fb")
+    val MODEL_NUMBER: UUID = UUID.fromString("00002a24-0000-1000-8000-00805f9b34fb")
+    val HARDWARE_REVISION: UUID = UUID.fromString("00002a27-0000-1000-8000-00805f9b34fb")
+    val FIRMWARE_REVISION: UUID = UUID.fromString("00002a26-0000-1000-8000-00805f9b34fb")
+    val SOFTWARE_REVISION: UUID = UUID.fromString("00002a28-0000-1000-8000-00805f9b34fb")
     val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
     const val ID_GET_ALL = 501
@@ -34,8 +40,10 @@ object PuriCareProtocol {
     }
 
     private fun frame(messageType: Int, payload: ByteArray): ByteArray {
-        val body = byteArrayOf(4, 'T'.code.toByte(), 'O'.code.toByte(), 'A'.code.toByte(), 'D'.code.toByte(),
-            messageType.toByte(), 0, payload.size.toByte()) + payload
+        val body = byteArrayOf(
+            4, 'T'.code.toByte(), 'O'.code.toByte(), 'A'.code.toByte(), 'D'.code.toByte(),
+            2, messageType.toByte(), 0, payload.size.toByte(),
+        ) + payload
         val crc = crc16(body)
         return body + byteArrayOf((crc shr 8).toByte(), crc.toByte())
     }
@@ -62,13 +70,11 @@ object PuriCareProtocol {
         if (addressLength <= 0 || packet.size < addressLength + 7) return emptyList()
         val address = packet.copyOfRange(1, 1 + addressLength).toString(Charsets.US_ASCII)
         val headerStart = 1 + addressLength
-        val (messageTypeIndex, payloadLengthIndex, payloadStart) = when (address) {
-            // Device → client: protocol/version, message type, sequence, length, payload.
-            "TOAP" -> Triple(headerStart + 1, headerStart + 3, headerStart + 4)
-            // Client-shaped frame retained for fixtures and forward compatibility.
-            "TOAD" -> Triple(headerStart, headerStart + 2, headerStart + 3)
-            else -> return emptyList()
-        }
+        if (address != "TOAP" && address != "TOAD") return emptyList()
+        // protocol/version, message type, sequence/reserved, length, payload.
+        val messageTypeIndex = headerStart + 1
+        val payloadLengthIndex = headerStart + 3
+        val payloadStart = headerStart + 4
         if (payloadStart > packet.size - 2 || payloadLengthIndex >= packet.size) return emptyList()
         val messageType = packet[messageTypeIndex].toInt() and 0xff
         if (messageType != 4 && messageType != 16) return emptyList()
@@ -83,7 +89,7 @@ object PuriCareProtocol {
             val inline = header and 0x0f
             index += 2
             val bytes = format
-            val value = when {
+            var value = when {
                 bytes == 0 -> inline
                 index + bytes <= end -> {
                     var v = 0
@@ -93,6 +99,8 @@ object PuriCareProtocol {
                 }
                 else -> break
             }
+            // Battery status is [levelPercent, chargeState]; the UI value is the first byte.
+            if (id == ID_BATTERY && bytes >= 1) value = packet[index - bytes].toInt() and 0xff
             result += Reading(id, value)
         }
         return result
@@ -106,6 +114,7 @@ data class AirSnapshot(
     val battery: Int? = null,
     val power: Boolean? = null,
     val fan: Int? = null,
+    val turbo: Boolean? = null,
     val auto: Boolean? = null,
     val light: Boolean? = null,
     val filterRemaining: Int? = null,
@@ -121,7 +130,8 @@ fun AirSnapshot.with(readings: List<PuriCareProtocol.Reading>): AirSnapshot {
             PuriCareProtocol.ID_PM10 -> next.copy(pm10 = reading.value)
             PuriCareProtocol.ID_BATTERY -> next.copy(battery = reading.value.coerceIn(0, 100))
             PuriCareProtocol.ID_POWER -> next.copy(power = reading.value != 0)
-            PuriCareProtocol.ID_FAN, PuriCareProtocol.ID_TURBO -> next.copy(fan = reading.value)
+            PuriCareProtocol.ID_FAN -> next.copy(fan = reading.value)
+            PuriCareProtocol.ID_TURBO -> next.copy(turbo = reading.value != 0)
             PuriCareProtocol.ID_AUTO -> next.copy(auto = reading.value != 0)
             PuriCareProtocol.ID_LIGHT -> next.copy(light = reading.value != 0)
             PuriCareProtocol.ID_FILTER_REMAIN -> next.copy(filterRemaining = reading.value)
