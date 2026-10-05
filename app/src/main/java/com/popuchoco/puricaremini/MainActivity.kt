@@ -17,7 +17,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -87,7 +94,7 @@ private fun PuriCareTheme(appTheme: AppTheme, content: @Composable () -> Unit) {
 }
 
 private enum class Tab(val label: String, val icon: ImageVector) {
-    Home("總覽", Icons.Outlined.Air), Device("裝置", Icons.Outlined.Bluetooth), Info("資訊", Icons.Outlined.Info)
+    Home("總覽", AppIcons.Air), Device("裝置", AppIcons.Bluetooth), Info("資訊", Icons.Filled.Info)
 }
 
 @Composable
@@ -159,7 +166,7 @@ private fun HomeScreen(state: BleUiState, ble: BleManager, onConnect: () -> Unit
             ControlPanel(state.snapshot, ble)
             SnapshotGrid(state.snapshot)
             OutlinedButton(onClick = ble::refresh, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-                Icon(Icons.Outlined.Refresh, null); Spacer(Modifier.width(8.dp)); Text("更新裝置狀態")
+                Icon(Icons.Filled.Refresh, null); Spacer(Modifier.width(8.dp)); Text("更新裝置狀態")
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -170,7 +177,7 @@ private fun HomeScreen(state: BleUiState, ble: BleManager, onConnect: () -> Unit
 private fun EmptyConnection(onConnect: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(top = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Surface(Modifier.size(96.dp), shape = CircleShape, color = TealSoft) {
-            Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Air, null, tint = Teal, modifier = Modifier.size(48.dp)) }
+            Box(contentAlignment = Alignment.Center) { Icon(AppIcons.Air, null, tint = Teal, modifier = Modifier.size(48.dp)) }
         }
         Spacer(Modifier.height(24.dp))
         Text("讓舊機器重新呼吸", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
@@ -178,7 +185,7 @@ private fun EmptyConnection(onConnect: () -> Unit) {
         Text("直接透過藍牙連線，不需要 LG 帳號或雲端服務。", color = Muted)
         Spacer(Modifier.height(28.dp))
         Button(onClick = onConnect, modifier = Modifier.fillMaxWidth().height(54.dp)) {
-            Icon(Icons.Outlined.BluetoothSearching, null); Spacer(Modifier.width(8.dp)); Text("連接 PuriCare Mini")
+            Icon(Icons.Filled.Search, null); Spacer(Modifier.width(8.dp)); Text("連接 PuriCare Mini")
         }
     }
 }
@@ -225,7 +232,7 @@ private fun ControlPanel(snapshot: AirSnapshot, ble: BleManager) {
     if (confirmPowerOff) {
         AlertDialog(
             onDismissRequest = { confirmPowerOff = false },
-            icon = { Icon(Icons.Outlined.PowerSettingsNew, contentDescription = null) },
+            icon = { Icon(AppIcons.Power, contentDescription = null) },
             title = { Text("確定關閉空氣清淨機？") },
             text = { Text("關閉後可能無法再透過 App 開啟，需要按機身電源鍵才能重新啟動。") },
             dismissButton = {
@@ -247,11 +254,11 @@ private fun ControlPanel(snapshot: AirSnapshot, ble: BleManager) {
         Text("控制", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
             Column {
-                ControlSwitch(Icons.Outlined.PowerSettingsNew, "電源", snapshot.power == true) { turnOn ->
+                ControlSwitch(AppIcons.Power, "電源", snapshot.power == true) { turnOn ->
                     if (turnOn) ble.setPower(true) else confirmPowerOff = true
                 }
                 HorizontalDivider(Modifier.padding(start = 64.dp), color = Line)
-                ControlSwitch(Icons.Outlined.LightMode, "清淨顯示燈", snapshot.light == true) { ble.setLight(it) }
+                ControlSwitch(Icons.Filled.Star, "清淨顯示燈", snapshot.light == true) { ble.setLight(it) }
             }
         }
         val currentFan = when {
@@ -321,17 +328,17 @@ private fun DeviceScreen(state: BleUiState, ble: BleManager, requestScan: () -> 
         if (state.connected) {
             Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                 Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Air, null, tint = Teal, modifier = Modifier.size(36.dp))
+                    Icon(AppIcons.Air, null, tint = Teal, modifier = Modifier.size(36.dp))
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) { Text(state.deviceName ?: "PuriCare Mini", fontWeight = FontWeight.SemiBold); Text("Bluetooth Low Energy", color = Muted, fontSize = 13.sp) }
-                    Icon(Icons.Outlined.CheckCircle, "已連線", tint = Teal)
+                    Icon(Icons.Filled.Done, "已連線", tint = Teal)
                 }
             }
             OutlinedButton(onClick = ble::disconnect, modifier = Modifier.fillMaxWidth()) { Text("中斷連線") }
         } else {
             Button(onClick = requestScan, enabled = !state.scanning, modifier = Modifier.fillMaxWidth().height(52.dp)) {
                 if (state.scanning) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Color.White)
-                else Icon(Icons.Outlined.BluetoothSearching, null)
+                else Icon(Icons.Filled.Search, null)
                 Spacer(Modifier.width(8.dp)); Text(if (state.scanning) "正在掃描…" else "掃描附近裝置")
             }
             if (state.candidates.isNotEmpty()) {
@@ -351,13 +358,13 @@ private fun DeviceScreen(state: BleUiState, ble: BleManager, requestScan: () -> 
 private fun DeviceRow(candidate: DeviceCandidate, onClick: () -> Unit) {
     Surface(Modifier.fillMaxWidth().clickable(onClick = onClick), shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface, border = androidx.compose.foundation.BorderStroke(1.dp, if (candidate.likely) MaterialTheme.colorScheme.primary.copy(.45f) else MaterialTheme.colorScheme.outlineVariant)) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.Bluetooth, null, tint = if (candidate.likely) Teal else Muted)
+            Icon(AppIcons.Bluetooth, null, tint = if (candidate.likely) Teal else Muted)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(candidate.name, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("訊號 ${candidate.rssi} dBm${if (candidate.likely) " · 可能是 PuriCare" else ""}", color = Muted, fontSize = 12.sp)
             }
-            Icon(Icons.Outlined.ChevronRight, null, tint = Muted)
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Muted)
         }
     }
 }
@@ -510,7 +517,7 @@ private fun InfoScreen(state: BleUiState, ble: BleManager, appTheme: AppTheme, o
                 },
                 enabled = state.connected,
                 label = { Text("當產品開啟時") },
-                leadingIcon = if (!sensorAlwaysOn) {{ Icon(Icons.Outlined.Check, null, Modifier.size(18.dp)) }} else null,
+                leadingIcon = if (!sensorAlwaysOn) {{ Icon(Icons.Filled.Check, null, Modifier.size(18.dp)) }} else null,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             )
             FilterChip(
@@ -518,7 +525,7 @@ private fun InfoScreen(state: BleUiState, ble: BleManager, appTheme: AppTheme, o
                 onClick = { confirmSensorAlwaysOn = true },
                 enabled = state.connected,
                 label = { Text("始終開啟") },
-                leadingIcon = if (sensorAlwaysOn) {{ Icon(Icons.Outlined.Check, null, Modifier.size(18.dp)) }} else null,
+                leadingIcon = if (sensorAlwaysOn) {{ Icon(Icons.Filled.Check, null, Modifier.size(18.dp)) }} else null,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             )
             Text("始終開啟會增加耗電與運轉聲。", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
@@ -543,7 +550,7 @@ private fun InfoScreen(state: BleUiState, ble: BleManager, appTheme: AppTheme, o
                 Text("保留最近 ${state.logs.size} 筆", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
             }
             FilledTonalButton(onClick = ::exportInformation) {
-                Icon(Icons.Outlined.FileDownload, contentDescription = null)
+                Icon(Icons.Filled.Share, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text("匯出")
             }
@@ -643,7 +650,7 @@ private fun DiagnosticsScreen(state: BleUiState) {
                 Text("保留最近 ${state.logs.size} 筆事件與原始封包。", color = Muted)
             }
             FilledTonalButton(onClick = ::exportDiagnostics) {
-                Icon(Icons.Outlined.FileDownload, contentDescription = null)
+                Icon(Icons.Filled.Share, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text("匯出")
             }
