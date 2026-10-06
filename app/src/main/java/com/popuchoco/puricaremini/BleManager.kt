@@ -36,11 +36,24 @@ class BleManager(private val context: Context) {
         private set
 
     private val handler = Handler(Looper.getMainLooper())
-    private val adapter = context.getSystemService(BluetoothManager::class.java).adapter
+    private val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter
     private var gatt: BluetoothGatt? = null
     private var lastCandidate: DeviceCandidate? = null
     private var backgroundConnectionEnabled = false
     private var manualDisconnect = false
+    private var reconnectAttempt = 0
+    private var protocolBatterySeen = false
+    private val reconnectRunnable = Runnable {
+        if (!backgroundConnectionEnabled || manualDisconnect || gatt != null) return@Runnable
+        val candidate = lastCandidate ?: return@Runnable
+        if (BackgroundReconnectPolicy.delayForAttempt(reconnectAttempt) == null) {
+            state = state.copy(phase = "背景重連已暫停，請開啟 App 後重試")
+            log("Background reconnect paused")
+            return@Runnable
+        }
+        reconnectAttempt++
+        startConnection(candidate)
+    }
     private val refreshAfterControl = Runnable { if (state.connected) refresh() }
     private val queue = ArrayDeque<() -> Unit>()
     private var operationRunning = false
@@ -86,9 +99,7 @@ class BleManager(private val context: Context) {
                     gatt = null
                     state = state.copy(phase = if (status == BluetoothGatt.GATT_SUCCESS) "連線已中斷" else "連線錯誤（$status）", connected = false)
                     log("GATT disconnected status=$status")
-                    if (backgroundConnectionEnabled && !manualDisconnect) {
-                        handler.postDelayed({ lastCandidate?.let(::connect) }, 3_000)
-                    }
+                    scheduleReconnect()
                 }
             }
         }
@@ -104,6 +115,7 @@ class BleManager(private val context: Context) {
                 }
                 if (!enableNotifications(g, uart.getCharacteristic(PuriCareProtocol.UART_RX))) return@post
                 state = state.copy(phase = "已連線", connected = true)
+                reconnectAttempt = 0
                 log("PuriCare UART service ready")
                 g.getService(PuriCareProtocol.BATTERY_SERVICE)?.getCharacteristic(PuriCareProtocol.BATTERY_LEVEL)?.let { battery ->
                     enqueue { g.readCharacteristic(battery) }
@@ -156,20 +168,25 @@ class BleManager(private val context: Context) {
     }
 
     fun startScan() {
-        if (!adapter.isEnabled) { state = state.copy(phase = "請先開啟藍牙"); return }
+        val bluetoothAdapter = adapter
+        if (bluetoothAdapter == null) { state = state.copy(phase = "此手機不支援 Bluetooth"); return }
+        if (!bluetoothAdapter.isEnabled) { state = state.copy(phase = "請先開啟藍牙"); return }
         stopScan()
         state = state.copy(scanning = true, phase = "正在尋找附近裝置…", candidates = emptyList())
-        adapter.bluetoothLeScanner.startScan(scanCallback)
+        bluetoothAdapter.bluetoothLeScanner?.startScan(scanCallback)
+            ?: run { state = state.copy(scanning = false, phase = "無法啟動 Bluetooth 掃描"); return }
         handler.postDelayed({ stopScan() }, 12_000)
         log("BLE scan started")
     }
 
     fun stopScan() {
-        runCatching { adapter.bluetoothLeScanner?.stopScan(scanCallback) }
+        runCatching { adapter?.bluetoothLeScanner?.stopScan(scanCallback) }
         if (state.scanning) state = state.copy(scanning = false, phase = if (state.connected) "已連線" else "選擇你的 PuriCare Mini")
     }
 
     fun connect(candidate: DeviceCandidate) {
+        reconnectAttempt = 0
+        handler.removeCallbacks(reconnectRunnable)
         stopScan()
         if (gatt != null) {
             disconnect()
@@ -180,7 +197,13 @@ class BleManager(private val context: Context) {
     }
 
     private fun startConnection(candidate: DeviceCandidate) {
+        val bluetoothAdapter = adapter
+        if (bluetoothAdapter == null) {
+            state = state.copy(phase = "此手機不支援 Bluetooth", connected = false)
+            return
+        }
         manualDisconnect = false
+        protocolBatterySeen = false
         lastCandidate = candidate
         context.getSharedPreferences("ble_device", Context.MODE_PRIVATE).edit()
             .putString("address", candidate.address)
@@ -188,11 +211,19 @@ class BleManager(private val context: Context) {
             .apply()
         state = state.copy(phase = "正在連線 ${candidate.name}…", deviceName = candidate.name, deviceDetails = DeviceDetails())
         log("Connecting ${candidate.name} (${candidate.address.take(8)}•••)")
-        gatt = adapter.getRemoteDevice(candidate.address).connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
+        gatt = runCatching {
+            bluetoothAdapter.getRemoteDevice(candidate.address).connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
+        }.getOrElse {
+            state = state.copy(phase = "無法建立連線", connected = false)
+            log("Connection start failed: ${it.javaClass.simpleName}")
+            null
+        }
+        if (gatt == null) scheduleReconnect()
     }
 
     fun disconnect() {
         manualDisconnect = true
+        handler.removeCallbacks(reconnectRunnable)
         operationRunning = false; operationToken++; queue.clear()
         gatt?.disconnect()
         state = state.copy(connected = false)
@@ -209,7 +240,12 @@ class BleManager(private val context: Context) {
 
     fun setBackgroundConnectionEnabled(enabled: Boolean) {
         backgroundConnectionEnabled = enabled
-        if (enabled) manualDisconnect = false
+        if (enabled) {
+            manualDisconnect = false
+            reconnectAttempt = 0
+        } else {
+            handler.removeCallbacks(reconnectRunnable)
+        }
         log("Background connection ${if (enabled) "enabled" else "disabled"}")
     }
 
@@ -219,6 +255,11 @@ class BleManager(private val context: Context) {
         val address = preferences.getString("address", null) ?: return
         val name = preferences.getString("name", null) ?: "PuriCare Mini"
         connect(DeviceCandidate(name, address, 0, true))
+    }
+
+    fun reportPermissionDenied() {
+        state = state.copy(scanning = false, phase = "需要附近裝置權限才能掃描與連線")
+        log("Nearby devices permission denied")
     }
 
     private fun writeAndRefresh(bytes: ByteArray, label: String) {
@@ -293,12 +334,22 @@ class BleManager(private val context: Context) {
                 log("GATT operation timed out")
                 operationRunning = false
                 operationToken++
-                runNext()
+                queue.clear()
+                state = state.copy(phase = "裝置回應逾時，正在重新連線", connected = false)
+                gatt?.disconnect()
             }
         }, 4_000)
     }
 
-    private fun completeOperation() = handler.post { operationRunning = false; operationToken++; runNext() }
+    private fun completeOperation() = handler.post {
+        if (!operationRunning) {
+            log("Ignored late GATT callback")
+            return@post
+        }
+        operationRunning = false
+        operationToken++
+        runNext()
+    }
 
     private fun handleValue(uuid: java.util.UUID, bytes: ByteArray) = handler.post {
         val text = bytes.toString(Charsets.UTF_8).trim('\u0000', ' ')
@@ -308,12 +359,13 @@ class BleManager(private val context: Context) {
                 state = state.copy(deviceDetails = DeviceDetails(version))
                 log("Device version=${version ?: "empty"}")
             }
-            PuriCareProtocol.BATTERY_LEVEL -> if (bytes.isNotEmpty()) {
+            PuriCareProtocol.BATTERY_LEVEL -> if (bytes.isNotEmpty() && !protocolBatterySeen) {
             state = state.copy(snapshot = state.snapshot.copy(battery = bytes[0].toInt() and 0xff, updatedAt = System.currentTimeMillis()))
             log("Battery ${bytes[0].toInt() and 0xff}%")
             }
             else -> {
             val decoded = PuriCareProtocol.decodeReport(bytes)
+            if (decoded.any { it.id == PuriCareProtocol.ID_BATTERY }) protocolBatterySeen = true
             state = state.copy(snapshot = state.snapshot.with(decoded))
             log("RX ${PuriCareProtocol.hex(bytes)}${if (decoded.isEmpty()) "" else " → " + decoded.joinToString { "${it.id}=${it.value}" }}")
             }
@@ -329,5 +381,18 @@ class BleManager(private val context: Context) {
     private fun log(message: String) {
         val stamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.TAIWAN).format(java.util.Date())
         state = state.copy(logs = (listOf("$stamp  $message") + state.logs).take(500))
+    }
+
+    private fun scheduleReconnect() {
+        handler.removeCallbacks(reconnectRunnable)
+        if (!backgroundConnectionEnabled || manualDisconnect || gatt != null) return
+        val delay = BackgroundReconnectPolicy.delayForAttempt(reconnectAttempt)
+        if (delay == null) {
+            state = state.copy(phase = "背景重連已暫停，請開啟 App 後重試")
+            log("Background reconnect limit reached")
+            return
+        }
+        state = state.copy(phase = "連線中斷，${delay / 1_000} 秒後重試", connected = false)
+        handler.postDelayed(reconnectRunnable, delay)
     }
 }

@@ -1,6 +1,7 @@
 package com.popuchoco.puricaremini
 
 import android.Manifest
+import android.app.Activity
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -31,8 +32,10 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -41,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
 import java.time.OffsetDateTime
 import java.util.*
+import androidx.core.view.WindowCompat
 
 private val Ink = Color(0xFF17211E)
 private val Mist = Color(0xFFF4F7F3)
@@ -90,6 +94,16 @@ private fun PuriCareTheme(appTheme: AppTheme, content: @Composable () -> Unit) {
         background = Mist, onBackground = Ink, surface = Color(0xFFFAFCFA), onSurface = Ink,
         surfaceVariant = Color(0xFFE8ECE9), onSurfaceVariant = Muted, outline = Line, error = Color(0xFFB3261E)
     )
+    val view = LocalView.current
+    SideEffect {
+        val window = (view.context as? Activity)?.window ?: return@SideEffect
+        window.statusBarColor = colors.background.toArgb()
+        window.navigationBarColor = colors.background.toArgb()
+        WindowCompat.getInsetsController(window, view).apply {
+            isAppearanceLightStatusBars = !dark
+            isAppearanceLightNavigationBars = !dark
+        }
+    }
     MaterialTheme(colorScheme = colors, typography = Typography(), content = content)
 }
 
@@ -103,6 +117,7 @@ private fun PuriCareApp(ble: BleManager, appTheme: AppTheme, onThemeChange: (App
     var tab by remember { mutableStateOf(Tab.Home) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
         if (grants.values.all { it }) ble.startScan()
+        else ble.reportPermissionDenied()
     }
 
     Scaffold(
@@ -140,7 +155,7 @@ private fun Header(state: BleUiState) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
-            Text("PURICARE MINI", fontSize = 12.sp, letterSpacing = 1.8.sp, color = Muted)
+            Text("PURICARE MINI", fontSize = 12.sp, letterSpacing = 1.8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("我的空氣", fontSize = 25.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
         }
         val statusContainer = if (state.connected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
@@ -153,7 +168,7 @@ private fun Header(state: BleUiState) {
             }
         }
     }
-    HorizontalDivider(color = Line)
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 }
 
 @Composable
@@ -176,13 +191,13 @@ private fun HomeScreen(state: BleUiState, ble: BleManager, onConnect: () -> Unit
 @Composable
 private fun EmptyConnection(onConnect: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(top = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Surface(Modifier.size(96.dp), shape = CircleShape, color = TealSoft) {
-            Box(contentAlignment = Alignment.Center) { Icon(AppIcons.Air, null, tint = Teal, modifier = Modifier.size(48.dp)) }
+        Surface(Modifier.size(96.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) {
+            Box(contentAlignment = Alignment.Center) { Icon(AppIcons.Air, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp)) }
         }
         Spacer(Modifier.height(24.dp))
         Text("讓舊機器重新呼吸", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
-        Text("直接透過藍牙連線，不需要 LG 帳號或雲端服務。", color = Muted)
+        Text("直接透過藍牙連線，不需要 LG 帳號或雲端服務。", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(28.dp))
         Button(onClick = onConnect, modifier = Modifier.fillMaxWidth().height(54.dp)) {
             Icon(Icons.Filled.Search, null); Spacer(Modifier.width(8.dp)); Text("連接 PuriCare Mini")
@@ -201,25 +216,25 @@ private fun AirReading(snapshot: AirSnapshot) {
         else -> "空氣品質不佳"
     }
     val accent = when {
-        pm == null -> Muted
-        pm <= 15 -> Teal
+        pm == null -> MaterialTheme.colorScheme.onSurfaceVariant
+        pm <= 15 -> MaterialTheme.colorScheme.primary
         pm <= 35 -> Color(0xFFAE7800)
         else -> Color(0xFFB54A3B)
     }
     Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
         Column(Modifier.padding(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("PM2.5", color = Muted, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                Text("PM2.5", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp, modifier = Modifier.weight(1f))
                 Text(quality, color = accent, fontWeight = FontWeight.Medium)
             }
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(pm?.toString() ?: "—", fontSize = 64.sp, lineHeight = 68.sp, fontWeight = FontWeight.Light, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(Modifier.width(8.dp))
-                Text("µg/m³", color = Muted, modifier = Modifier.padding(bottom = 10.dp))
+                Text("µg/m³", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 10.dp))
             }
             snapshot.updatedAt?.let {
-                Text("更新於 ${SimpleDateFormat("HH:mm", Locale.TAIWAN).format(Date(it))}", color = Muted, fontSize = 13.sp)
+                Text("更新於 ${SimpleDateFormat("HH:mm", Locale.TAIWAN).format(Date(it))}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
             }
         }
     }
@@ -257,7 +272,7 @@ private fun ControlPanel(snapshot: AirSnapshot, ble: BleManager) {
                 ControlSwitch(AppIcons.Power, "電源", snapshot.power == true) { turnOn ->
                     if (turnOn) ble.setPower(true) else confirmPowerOff = true
                 }
-                HorizontalDivider(Modifier.padding(start = 64.dp), color = Line)
+                HorizontalDivider(Modifier.padding(start = 64.dp), color = MaterialTheme.colorScheme.outlineVariant)
                 ControlSwitch(Icons.Filled.Star, "清淨顯示燈", snapshot.light == true) { ble.setLight(it) }
             }
         }
@@ -286,7 +301,7 @@ private fun ControlPanel(snapshot: AirSnapshot, ble: BleManager) {
 @Composable
 private fun ControlSwitch(icon: ImageVector, label: String, checked: Boolean, onChecked: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = Teal)
+        Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.width(20.dp))
         Text(label, modifier = Modifier.weight(1f), fontWeight = FontWeight.Medium)
         Switch(checked = checked, onCheckedChange = onChecked)
@@ -312,26 +327,38 @@ private fun SnapshotGrid(snapshot: AirSnapshot) {
 private fun Metric(label: String, value: String, unit: String, modifier: Modifier) {
     Surface(modifier, shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
         Column(Modifier.padding(16.dp)) {
-            Text(label, color = Muted, fontSize = 13.sp)
+            Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
             Spacer(Modifier.height(8.dp))
             Text(value, fontSize = 26.sp, fontWeight = FontWeight.Medium)
-            Text(unit, color = Muted, fontSize = 12.sp)
+            Text(unit, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
         }
     }
 }
 
 @Composable
 private fun DeviceScreen(state: BleUiState, ble: BleManager, requestScan: () -> Unit) {
+    var pendingCandidate by remember { mutableStateOf<DeviceCandidate?>(null) }
+    pendingCandidate?.let { candidate ->
+        AlertDialog(
+            onDismissRequest = { pendingCandidate = null },
+            title = { Text("連線至未辨識的裝置？") },
+            text = { Text("${candidate.name} 未被辨識為 PuriCare Mini。為避免傳送不相容的控制資料，請確認裝置後再繼續。") },
+            dismissButton = { TextButton(onClick = { pendingCandidate = null }) { Text("取消") } },
+            confirmButton = {
+                Button(onClick = { pendingCandidate = null; ble.connect(candidate) }) { Text("仍要連線") }
+            },
+        )
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("裝置連線", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-        Text(state.phase, color = if (state.connected) Teal else Muted)
+        Text(state.phase, color = if (state.connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
         if (state.connected) {
             Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                 Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(AppIcons.Air, null, tint = Teal, modifier = Modifier.size(36.dp))
+                    Icon(AppIcons.Air, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp))
                     Spacer(Modifier.width(16.dp))
-                    Column(Modifier.weight(1f)) { Text(state.deviceName ?: "PuriCare Mini", fontWeight = FontWeight.SemiBold); Text("Bluetooth Low Energy", color = Muted, fontSize = 13.sp) }
-                    Icon(Icons.Filled.Done, "已連線", tint = Teal)
+                    Column(Modifier.weight(1f)) { Text(state.deviceName ?: "PuriCare Mini", fontWeight = FontWeight.SemiBold); Text("Bluetooth Low Energy", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp) }
+                    Icon(Icons.Filled.Done, "已連線", tint = MaterialTheme.colorScheme.primary)
                 }
             }
             OutlinedButton(onClick = ble::disconnect, modifier = Modifier.fillMaxWidth()) { Text("中斷連線") }
@@ -343,14 +370,16 @@ private fun DeviceScreen(state: BleUiState, ble: BleManager, requestScan: () -> 
             }
             if (state.candidates.isNotEmpty()) {
                 Text("附近裝置", fontWeight = FontWeight.SemiBold)
-                state.candidates.forEach { candidate -> DeviceRow(candidate) { ble.connect(candidate) } }
+                state.candidates.forEach { candidate -> DeviceRow(candidate) {
+                    if (candidate.likely) ble.connect(candidate) else pendingCandidate = candidate
+                } }
             } else if (!state.scanning) {
-                Text("請讓 PuriCare Mini 進入配對模式，再開始掃描。", color = Muted)
+                Text("請讓 PuriCare Mini 進入配對模式，再開始掃描。", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        HorizontalDivider(color = Line)
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         Text("隱私", fontWeight = FontWeight.SemiBold)
-        Text("App 僅使用 Android 的「附近裝置」權限，資料留在手機端，不需要位置、LG 帳號或網路連線。", color = Muted, lineHeight = 21.sp)
+        Text("App 使用 Android 的「附近裝置」權限；啟用背景連線時另需通知與前景服務。資料留在手機端，不需要位置、LG 帳號或網路連線。", color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 21.sp)
     }
 }
 
@@ -358,13 +387,13 @@ private fun DeviceScreen(state: BleUiState, ble: BleManager, requestScan: () -> 
 private fun DeviceRow(candidate: DeviceCandidate, onClick: () -> Unit) {
     Surface(Modifier.fillMaxWidth().clickable(onClick = onClick), shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface, border = androidx.compose.foundation.BorderStroke(1.dp, if (candidate.likely) MaterialTheme.colorScheme.primary.copy(.45f) else MaterialTheme.colorScheme.outlineVariant)) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(AppIcons.Bluetooth, null, tint = if (candidate.likely) Teal else Muted)
+            Icon(AppIcons.Bluetooth, null, tint = if (candidate.likely) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(candidate.name, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("訊號 ${candidate.rssi} dBm${if (candidate.likely) " · 可能是 PuriCare" else ""}", color = Muted, fontSize = 12.sp)
+                Text("訊號 ${candidate.rssi} dBm${if (candidate.likely) " · 可能是 PuriCare" else ""}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
             }
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Muted)
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -385,6 +414,14 @@ private fun InfoScreen(state: BleUiState, ble: BleManager, appTheme: AppTheme, o
         state.snapshot.sensorAlwaysOn?.let {
             sensorAlwaysOn = it
             featurePreferences.setSensorAlwaysOn(it)
+        }
+    }
+    LaunchedEffect(state.snapshot.auto) {
+        if (proximityAutoPower) {
+            state.snapshot.auto?.let {
+                proximityAutoPower = it
+                featurePreferences.setProximityAutoPower(it)
+            }
         }
     }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -494,7 +531,7 @@ private fun InfoScreen(state: BleUiState, ble: BleManager, appTheme: AppTheme, o
             )
             SettingSwitch(
                 title = "依距離自動開關",
-                description = "Bluetooth 連線狀態隨手機距離改變；與背景連線只能擇一。",
+                description = "由裝置依 Bluetooth 連線狀態判斷；此模式仍待更多實機驗證，且與背景連線只能擇一。",
                 checked = proximityAutoPower,
                 enabled = state.connected,
                 onCheckedChange = ::changeProximityAutoPower,
@@ -608,59 +645,3 @@ private fun SettingSwitch(
 }
 
 private fun String?.orUnavailable(): String = if (isNullOrBlank()) "裝置未提供" else this
-
-@Composable
-private fun DiagnosticsScreen(state: BleUiState) {
-    val context = LocalContext.current
-    var pendingExport by remember { mutableStateOf<String?>(null) }
-    val createDocument = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        val result = runCatching {
-            context.contentResolver.openOutputStream(uri, "w")?.bufferedWriter(Charsets.UTF_8)?.use { writer ->
-                writer.write(pendingExport ?: error("沒有可匯出的診斷內容"))
-            } ?: error("無法開啟目的檔案")
-        }
-        Toast.makeText(
-            context,
-            if (result.isSuccess) "診斷紀錄已匯出" else "匯出失敗：${result.exceptionOrNull()?.message}",
-            Toast.LENGTH_LONG,
-        ).show()
-        pendingExport = null
-    }
-
-    fun exportDiagnostics() {
-        val version = runCatching {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName
-        }.getOrNull() ?: "unknown"
-        pendingExport = DiagnosticExport.toJson(
-            state = state,
-            generatedAt = OffsetDateTime.now().toString(),
-            appVersion = version,
-            androidVersion = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
-        )
-        val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.TAIWAN).format(Date())
-        createDocument.launch("puricare-mini-diagnostics-$stamp.json")
-    }
-
-    Column(Modifier.fillMaxSize().padding(20.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("BLE 診斷", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(6.dp))
-                Text("保留最近 ${state.logs.size} 筆事件與原始封包。", color = Muted)
-            }
-            FilledTonalButton(onClick = ::exportDiagnostics) {
-                Icon(Icons.Filled.Share, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("匯出")
-            }
-        }
-        Spacer(Modifier.height(16.dp))
-        Surface(Modifier.fillMaxSize(), shape = RoundedCornerShape(16.dp), color = Color(0xFF101714)) {
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-                if (state.logs.isEmpty()) Text("尚無紀錄", color = Color(0xFF91A49C), fontFamily = FontFamily.Monospace)
-                state.logs.forEach { Text(it, color = Color(0xFFB9D4C9), fontSize = 11.sp, lineHeight = 17.sp, fontFamily = FontFamily.Monospace); Spacer(Modifier.height(5.dp)) }
-            }
-        }
-    }
-}

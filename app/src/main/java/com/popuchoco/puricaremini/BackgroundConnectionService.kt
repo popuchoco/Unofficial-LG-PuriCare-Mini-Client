@@ -2,6 +2,7 @@ package com.popuchoco.puricaremini
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -24,8 +25,22 @@ class BackgroundConnectionService : Service() {
             .setContentText("正在維持與空氣清淨機的連線")
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    this,
+                    0,
+                    Intent(this, MainActivity::class.java),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
             .build()
-        startForeground(NOTIFICATION_ID, notification)
+        val started = runCatching { startForeground(NOTIFICATION_ID, notification) }.isSuccess
+        if (!started) {
+            FeaturePreferences(this).setBackgroundConnection(false)
+            ble.setBackgroundConnectionEnabled(false)
+            stopSelf()
+            return
+        }
         ble.setBackgroundConnectionEnabled(true)
         ble.resumeSavedConnection()
     }
@@ -35,7 +50,7 @@ class BackgroundConnectionService : Service() {
         super.onDestroy()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_NOT_STICKY
 
     override fun onBind(intent: Intent?): IBinder? = null
 

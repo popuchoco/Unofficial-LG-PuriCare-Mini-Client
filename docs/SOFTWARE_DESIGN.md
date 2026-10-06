@@ -71,7 +71,7 @@ JSON 使用 `schemaVersion`，未取得欄位輸出 `null`。匯出由 Android S
 ## 9. 測試策略
 
 - JVM unit tests：GET／SET frame、CRC、REPORT fixture、Battery／filter 解碼、Auto 值、Turbo 與風量獨立性、JSON escaping 與 null。
-- Build verification：`testDebugUnitTest` 後執行 `assembleDebug`。
+- Build verification：`testDebugUnitTest` 後執行 `assembleDebug` 與 `assembleRelease`，確認 R8 與資源縮減規則可用。
 - 實機驗證：掃描、連線、通知、控制 ACK、控制後狀態、版本欄位與深淺色可讀性。
 - 新增裝置回報格式時，先以去識別化 fixture 建立 regression test，再擴充 parser。
 

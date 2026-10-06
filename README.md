@@ -19,9 +19,9 @@
 
 ## 背景連線
 
-背景連線使用 Android Foreground Service 與常駐通知維持 BLE，連線中斷後會嘗試重新連接上次裝置。不同手機的省電策略仍可能中止服務。
+背景連線使用 Android Foreground Service 與常駐通知維持 BLE。意外中斷後會以 3、6、15、30、60 秒的間隔嘗試重新連接上次裝置，達到上限後暫停，避免裝置關機時持續耗電。不同手機的省電策略仍可能中止服務。
 
-依距離自動開關需要讓 Bluetooth 連線隨手機與產品的距離改變，因此不能與背景連線同時使用；App 以單一模式設定保證兩者互斥。
+依距離自動開關由裝置依 Bluetooth 連線狀態判斷，因此不能與背景連線同時使用；App 以單一模式設定保證兩者互斥。此模式仍待更多手機與裝置狀態的實機驗證。
 
 裝置若未提供版本欄位，對應內容會顯示「裝置未提供」。
 
@@ -30,7 +30,7 @@
 需要 JDK 17、Android SDK 35、Gradle 8.9、Android Gradle Plugin 8.7.2 與 Kotlin 2.0.21。
 
 ```powershell
-.\gradlew.bat testDebugUnitTest assembleDebug --no-daemon
+.\gradlew.bat testDebugUnitTest assembleDebug assembleRelease --no-daemon
 ```
 
 產物位於 `app\build\outputs\apk\debug\app-debug.apk`。

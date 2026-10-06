@@ -38,3 +38,9 @@ object ConnectionModePolicy {
     fun background(enabled: Boolean) = if (enabled) ConnectionMode.BACKGROUND else ConnectionMode.NONE
     fun proximityAuto(enabled: Boolean) = if (enabled) ConnectionMode.PROXIMITY_AUTO else ConnectionMode.NONE
 }
+
+object BackgroundReconnectPolicy {
+    private val delays = longArrayOf(3_000, 6_000, 15_000, 30_000, 60_000)
+
+    fun delayForAttempt(attempt: Int): Long? = delays.getOrNull(attempt)
+}

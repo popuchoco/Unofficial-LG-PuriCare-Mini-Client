@@ -12,8 +12,8 @@ android {
         applicationId = "com.popuchoco.puricaremini"
         minSdk = 31
         targetSdk = 35
-        versionCode = 8
-        versionName = "0.2.1-alpha"
+        versionCode = 9
+        versionName = "0.2.2-alpha"
     }
 
     buildTypes {
