@@ -19,10 +19,36 @@ class BackgroundConnectionService : Service() {
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "PuriCare 背景連線", NotificationManager.IMPORTANCE_LOW),
         )
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+        val notification = buildNotification("正在準備連線")
+        val started = runCatching { startForeground(NOTIFICATION_ID, notification) }.isSuccess
+        if (!started) {
+            FeaturePreferences(this).setBackgroundConnection(false)
+            ble.setBackgroundConnectionEnabled(false)
+            stopSelf()
+            return
+        }
+        ble.backgroundStatusListener = { status, message ->
+            val text = backgroundNotificationText(status, message)
+            runCatching {
+                getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification(text))
+            }
+        }
+        ble.setBackgroundConnectionEnabled(true)
+        if (ble.state.connected) {
+            ble.backgroundStatusListener?.invoke(
+                BackgroundConnectionStatus.CONNECTED,
+                "已連線至 ${ble.state.deviceName ?: "PuriCare Mini"}",
+            )
+        } else {
+            ble.resumeSavedConnection()
+        }
+    }
+
+    private fun buildNotification(text: String) =
+        NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
             .setContentTitle("PuriCare Mini 背景連線")
-            .setContentText("正在維持與空氣清淨機的連線")
+            .setContentText(text)
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setContentIntent(
@@ -34,18 +60,9 @@ class BackgroundConnectionService : Service() {
                 ),
             )
             .build()
-        val started = runCatching { startForeground(NOTIFICATION_ID, notification) }.isSuccess
-        if (!started) {
-            FeaturePreferences(this).setBackgroundConnection(false)
-            ble.setBackgroundConnectionEnabled(false)
-            stopSelf()
-            return
-        }
-        ble.setBackgroundConnectionEnabled(true)
-        ble.resumeSavedConnection()
-    }
 
     override fun onDestroy() {
+        ble.backgroundStatusListener = null
         ble.setBackgroundConnectionEnabled(false)
         super.onDestroy()
     }

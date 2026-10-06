@@ -15,6 +15,8 @@ import java.util.ArrayDeque
 
 data class DeviceCandidate(val name: String, val address: String, val rssi: Int, val likely: Boolean)
 
+enum class BackgroundConnectionStatus { CONNECTED, RETRYING, PAUSED }
+
 data class DeviceDetails(
     val version: String? = null,
 )
@@ -35,6 +37,8 @@ class BleManager(private val context: Context) {
     var state by mutableStateOf(BleUiState())
         private set
 
+    var backgroundStatusListener: ((BackgroundConnectionStatus, String) -> Unit)? = null
+
     private val handler = Handler(Looper.getMainLooper())
     private val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter
     private var gatt: BluetoothGatt? = null
@@ -49,6 +53,7 @@ class BleManager(private val context: Context) {
         if (BackgroundReconnectPolicy.delayForAttempt(reconnectAttempt) == null) {
             state = state.copy(phase = "背景重連已暫停，請開啟 App 後重試")
             log("Background reconnect paused")
+            backgroundStatusListener?.invoke(BackgroundConnectionStatus.PAUSED, state.phase)
             return@Runnable
         }
         reconnectAttempt++
@@ -106,6 +111,7 @@ class BleManager(private val context: Context) {
 
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
             handler.post {
+                if (!isCurrentConnection(gatt, g)) { log("Ignored callback from previous connection"); return@post }
                 val uart = g.getService(PuriCareProtocol.UART_SERVICE)
                 if (status != BluetoothGatt.GATT_SUCCESS || uart == null) {
                     val services = g.services.joinToString { it.uuid.toString() }
@@ -116,6 +122,7 @@ class BleManager(private val context: Context) {
                 if (!enableNotifications(g, uart.getCharacteristic(PuriCareProtocol.UART_RX))) return@post
                 state = state.copy(phase = "已連線", connected = true)
                 reconnectAttempt = 0
+                backgroundStatusListener?.invoke(BackgroundConnectionStatus.CONNECTED, "已連線至 ${state.deviceName ?: "PuriCare Mini"}")
                 log("PuriCare UART service ready")
                 g.getService(PuriCareProtocol.BATTERY_SERVICE)?.getCharacteristic(PuriCareProtocol.BATTERY_LEVEL)?.let { battery ->
                     enqueue { g.readCharacteristic(battery) }
@@ -133,36 +140,41 @@ class BleManager(private val context: Context) {
         }
 
         override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
+            if (!isCurrentConnection(gatt, g)) { handler.post { log("Ignored callback from previous connection") }; return }
             handleValue(characteristic.uuid, value)
         }
 
         @Deprecated("Legacy callback for Android 12")
         override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
+            if (!isCurrentConnection(gatt, g)) { handler.post { log("Ignored callback from previous connection") }; return }
             handleValue(characteristic.uuid, characteristic.value ?: return)
         }
 
         override fun onCharacteristicRead(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray, status: Int) {
+            if (!isCurrentConnection(gatt, g)) { handler.post { log("Ignored callback from previous connection") }; return }
             if (status == BluetoothGatt.GATT_SUCCESS) handleValue(characteristic.uuid, value)
             else handler.post { log("Read ${deviceInfoLabel(characteristic.uuid)} failed status=$status") }
-            completeOperation()
+            completeOperation(g)
         }
 
         @Deprecated("Legacy callback for Android 12")
         override fun onCharacteristicRead(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
+            if (!isCurrentConnection(gatt, g)) { handler.post { log("Ignored callback from previous connection") }; return }
             if (status == BluetoothGatt.GATT_SUCCESS) handleValue(characteristic.uuid, characteristic.value ?: byteArrayOf())
             else handler.post { log("Read ${deviceInfoLabel(characteristic.uuid)} failed status=$status") }
-            completeOperation()
+            completeOperation(g)
         }
 
         override fun onCharacteristicWrite(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
-            handler.post { log("TX complete status=$status"); completeOperation() }
+            handler.post { log("TX complete status=$status"); completeOperation(g) }
         }
 
         override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
             handler.post {
+                if (!isCurrentConnection(gatt, g)) { log("Ignored callback from previous connection"); return@post }
                 log("Notifications ${if (status == 0) "enabled" else "failed ($status)"}")
                 if (status != BluetoothGatt.GATT_SUCCESS) state = state.copy(phase = "無法訂閱裝置通知", connected = false)
-                completeOperation()
+                completeOperation(g)
             }
         }
     }
@@ -283,7 +295,7 @@ class BleManager(private val context: Context) {
                 @Suppress("DEPRECATION")
                 g.writeCharacteristic(tx)
             }
-            if (!started) { log("TX could not start"); completeOperation() }
+            if (!started) { log("TX could not start"); completeOperation(g) }
         }
     }
 
@@ -313,7 +325,7 @@ class BleManager(private val context: Context) {
                 @Suppress("DEPRECATION")
                 g.writeDescriptor(descriptor)
             }
-            if (!started) { log("Notification write could not start"); completeOperation() }
+            if (!started) { log("Notification write could not start"); completeOperation(g) }
         }
         return true
     }
@@ -341,7 +353,11 @@ class BleManager(private val context: Context) {
         }, 4_000)
     }
 
-    private fun completeOperation() = handler.post {
+    private fun completeOperation(sourceGatt: BluetoothGatt) = handler.post {
+        if (!isCurrentConnection(gatt, sourceGatt)) {
+            log("Ignored callback from previous connection")
+            return@post
+        }
         if (!operationRunning) {
             log("Ignored late GATT callback")
             return@post
@@ -390,9 +406,11 @@ class BleManager(private val context: Context) {
         if (delay == null) {
             state = state.copy(phase = "背景重連已暫停，請開啟 App 後重試")
             log("Background reconnect limit reached")
+            backgroundStatusListener?.invoke(BackgroundConnectionStatus.PAUSED, state.phase)
             return
         }
         state = state.copy(phase = "連線中斷，${delay / 1_000} 秒後重試", connected = false)
+        backgroundStatusListener?.invoke(BackgroundConnectionStatus.RETRYING, state.phase)
         handler.postDelayed(reconnectRunnable, delay)
     }
 }

@@ -38,6 +38,7 @@ Android Client 負責 PuriCare Mini 的 BLE 搜尋、連線、即時狀態解碼
 6. 讀取 Battery 與 Device Information 中實際存在的 characteristic。
 7. 發送 GET ALL，持續將 REPORT／ACK 合併到畫面狀態。
 8. 未啟用背景模式時，Activity 結束會中斷 GATT；背景模式則交由 Foreground Service 持有。
+9. 回呼先核對目前 GATT 實例；舊連線的晚到回呼直接忽略。常駐通知同步呈現已連線、重試中與已暫停三種狀態。
 
 ## 5. GATT concurrency
 

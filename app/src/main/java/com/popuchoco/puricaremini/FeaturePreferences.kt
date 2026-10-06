@@ -44,3 +44,13 @@ object BackgroundReconnectPolicy {
 
     fun delayForAttempt(attempt: Int): Long? = delays.getOrNull(attempt)
 }
+
+internal fun isCurrentConnection(current: Any?, callbackSource: Any?): Boolean =
+    current != null && current === callbackSource
+
+internal fun backgroundNotificationText(status: BackgroundConnectionStatus, message: String): String =
+    when (status) {
+        BackgroundConnectionStatus.CONNECTED,
+        BackgroundConnectionStatus.RETRYING -> message
+        BackgroundConnectionStatus.PAUSED -> "重連已暫停，點此開啟 App"
+    }

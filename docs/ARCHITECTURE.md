@@ -44,6 +44,8 @@ Android GATT 的 descriptor、characteristic read 與 write 都是非同步操�
 
 使用 Android Foreground Service 與低干擾常駐通知保留共用 `BleManager`。意外斷線後採 3、6、15、30、60 秒的有限退避，嘗試連接 App 私有設定中的上次裝置；使用者主動中斷、關閉背景模式或達到上限時不再重連。
 
+通知會隨連線生命週期顯示已連線、重試中或已暫停。所有 GATT 回呼都必須來自目前的連線實例；舊連線晚到的回呼不會改動狀態或推進操作佇列。
+
 背景連線與依 Bluetooth 距離自動開關採單一 `ConnectionMode` 保存，因此不可能同時啟用。切換到距離模式時停止背景服務；切換到背景模式時先關閉裝置端距離模式。
 
 ## 主要資料流
