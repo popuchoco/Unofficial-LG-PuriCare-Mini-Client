@@ -45,6 +45,20 @@ class PuriCareProtocolTest {
         assertEquals(true, snapshot.turbo)
     }
 
+    @Test fun lightLevelFourUsesId590AndValueFour() {
+        val packet = PuriCareProtocol.setByte(PuriCareProtocol.ID_LIGHT, 4)
+        assertArrayEquals(byteArrayOf(4, 84, 79, 65, 68, 2, 1, 0, 2, 0x93.toByte(), 0x84.toByte()), packet.copyOfRange(0, 11))
+    }
+
+    @Test fun localLightLevelSurvivesReportsThatOmitLight() {
+        val snapshot = AirSnapshot().withLocalLightLevel(4).with(
+            listOf(PuriCareProtocol.Reading(PuriCareProtocol.ID_FAN, 8)),
+        )
+
+        assertEquals(4, snapshot.lightLevel)
+        assertEquals(8, snapshot.fan)
+    }
+
     @Test fun crcMatchesProtocolTestVector() {
         assertEquals(0x31c3, PuriCareProtocol.crc16("123456789".toByteArray()))
     }

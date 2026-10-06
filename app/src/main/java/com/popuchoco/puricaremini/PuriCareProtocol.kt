@@ -115,7 +115,7 @@ data class AirSnapshot(
     val turbo: Boolean? = null,
     val auto: Boolean? = null,
     val sensorAlwaysOn: Boolean? = null,
-    val light: Boolean? = null,
+    val lightLevel: Int? = null,
     val filterRemaining: Int? = null,
     val updatedAt: Long? = null,
 )
@@ -133,10 +133,13 @@ fun AirSnapshot.with(readings: List<PuriCareProtocol.Reading>): AirSnapshot {
             PuriCareProtocol.ID_TURBO -> next.copy(turbo = reading.value != 0)
             PuriCareProtocol.ID_AUTO -> next.copy(auto = reading.value != 0)
             PuriCareProtocol.ID_MONITORING -> next.copy(sensorAlwaysOn = reading.value != 0)
-            PuriCareProtocol.ID_LIGHT -> next.copy(light = reading.value != 0)
+            PuriCareProtocol.ID_LIGHT -> next.copy(lightLevel = reading.value.coerceIn(0, 4))
             PuriCareProtocol.ID_FILTER_REMAIN -> next.copy(filterRemaining = reading.value)
             else -> next
         }
     }
     return if (readings.isEmpty()) next else next.copy(updatedAt = System.currentTimeMillis())
 }
+
+fun AirSnapshot.withLocalLightLevel(level: Int): AirSnapshot =
+    copy(lightLevel = level.coerceIn(0, 4), updatedAt = System.currentTimeMillis())

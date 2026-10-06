@@ -10,7 +10,7 @@ object DiagnosticExport {
         proximityAutoPowerActive: Boolean = false,
     ): String = buildString {
         appendLine("{")
-        appendLine("  \"schemaVersion\": 1,")
+        appendLine("  \"schemaVersion\": 2,")
         appendLine("  \"generatedAt\": ${generatedAt.json()},")
         appendLine("  \"appVersion\": ${appVersion.json()},")
         appendLine("  \"androidVersion\": ${androidVersion.json()},")
@@ -38,7 +38,7 @@ object DiagnosticExport {
         appendLine("    \"turbo\": ${state.snapshot.turbo.jsonBoolean()},")
         appendLine("    \"auto\": ${state.snapshot.auto.jsonBoolean()},")
         appendLine("    \"sensorAlwaysOn\": ${state.snapshot.sensorAlwaysOn.jsonBoolean()},")
-        appendLine("    \"light\": ${state.snapshot.light.jsonBoolean()},")
+        appendLine("    \"lightLevel\": ${state.snapshot.lightLevel.jsonNumber()},")
         appendLine("    \"filterRemaining\": ${state.snapshot.filterRemaining.jsonNumber()},")
         appendLine("    \"updatedAtEpochMs\": ${state.snapshot.updatedAt.jsonNumber()}")
         appendLine("  },")

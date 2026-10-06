@@ -25,7 +25,6 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -273,7 +272,27 @@ private fun ControlPanel(snapshot: AirSnapshot, ble: BleManager) {
                     if (turnOn) ble.setPower(true) else confirmPowerOff = true
                 }
                 HorizontalDivider(Modifier.padding(start = 64.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                ControlSwitch(Icons.Filled.Star, "清淨顯示燈", snapshot.light == true) { ble.setLight(it) }
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("清潔指示燈亮度", modifier = Modifier.weight(1f), fontWeight = FontWeight.Medium)
+                        Text(
+                            LIGHT_LEVELS.firstOrNull { it.first == snapshot.lightLevel }?.second ?: "尚未設定",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontSize = 13.sp,
+                        )
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        LIGHT_LEVELS.forEach { (level, label) ->
+                            FilterChip(
+                                selected = snapshot.lightLevel == level,
+                                onClick = { ble.setLightLevel(level) },
+                                label = { Text(label.removeSuffix("%"), fontSize = 12.sp) },
+                                modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                            )
+                        }
+                    }
+                    Text("按鈕數值單位為百分比。", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                }
             }
         }
         val currentFan = when {
@@ -645,3 +664,5 @@ private fun SettingSwitch(
 }
 
 private fun String?.orUnavailable(): String = if (isNullOrBlank()) "裝置未提供" else this
+
+private val LIGHT_LEVELS = listOf(0 to "0%", 1 to "20%", 2 to "50%", 3 to "80%", 4 to "100%")

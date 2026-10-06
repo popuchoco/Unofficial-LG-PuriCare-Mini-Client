@@ -10,7 +10,7 @@ class DiagnosticExportTest {
             phase = "已連線",
             connected = true,
             deviceName = "PuriCare \"Mini\"",
-            snapshot = AirSnapshot(pm25 = 12, battery = 88, power = true, fan = 8, turbo = false),
+            snapshot = AirSnapshot(pm25 = 12, battery = 88, power = true, fan = 8, turbo = false, lightLevel = 3),
             deviceDetails = DeviceDetails(version = "1.2.3"),
             logs = listOf("12:00:01  RX 04 54", "12:00:00  TX GET ALL"),
         )
@@ -27,6 +27,8 @@ class DiagnosticExportTest {
         assertTrue(json.contains("\"pm25\": 12"))
         assertTrue(json.contains("\"fan\": 8"))
         assertTrue(json.contains("\"turbo\": false"))
+        assertTrue(json.contains("\"lightLevel\": 3"))
+        assertTrue(json.contains("\"schemaVersion\": 2"))
         assertTrue(json.contains("\"deviceVersion\": \"1.2.3\""))
         assertTrue(json.contains("\"backgroundConnectionSupported\": true"))
         assertTrue(json.contains("\"backgroundConnectionActive\": true"))

@@ -221,7 +221,13 @@ class BleManager(private val context: Context) {
             .putString("address", candidate.address)
             .putString("name", candidate.name)
             .apply()
-        state = state.copy(phase = "正在連線 ${candidate.name}…", deviceName = candidate.name, deviceDetails = DeviceDetails())
+        state = state.copy(
+            phase = "正在連線 ${candidate.name}…",
+            connected = false,
+            deviceName = candidate.name,
+            snapshot = AirSnapshot(),
+            deviceDetails = DeviceDetails(),
+        )
         log("Connecting ${candidate.name} (${candidate.address.take(8)}•••)")
         gatt = runCatching {
             bluetoothAdapter.getRemoteDevice(candidate.address).connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
@@ -245,7 +251,11 @@ class BleManager(private val context: Context) {
     fun setPower(on: Boolean) = writeAndRefresh(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_POWER, on), "POWER ${if (on) "ON" else "OFF"}")
     fun setAuto(on: Boolean) = writeAndRefresh(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_AUTO, on), "AUTO ${if (on) "ON" else "OFF"}")
     fun setSensorMonitoring(alwaysOn: Boolean) = writeAndRefresh(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_MONITORING, alwaysOn), "SENSOR ${if (alwaysOn) "ALWAYS" else "NORMAL"}")
-    fun setLight(on: Boolean) = writeAndRefresh(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_LIGHT, on), "LIGHT ${if (on) "ON" else "OFF"}")
+    fun setLightLevel(level: Int) {
+        val safeLevel = level.coerceIn(0, 4)
+        state = state.copy(snapshot = state.snapshot.withLocalLightLevel(safeLevel))
+        writeAndRefresh(PuriCareProtocol.setByte(PuriCareProtocol.ID_LIGHT, safeLevel), "LIGHT LEVEL $safeLevel")
+    }
     fun setFan(level: Int) = writeAndRefresh(PuriCareProtocol.setByte(PuriCareProtocol.ID_FAN, level), "FAN $level")
     fun setFanAuto() = writeAndRefresh(PuriCareProtocol.setByte(PuriCareProtocol.ID_FAN, 8), "FAN AUTO")
     fun setTurbo(on: Boolean) = writeAndRefresh(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_TURBO, on), "TURBO ${if (on) "ON" else "OFF"}")
