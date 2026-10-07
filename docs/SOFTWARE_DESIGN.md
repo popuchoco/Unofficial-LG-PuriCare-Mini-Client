@@ -13,6 +13,8 @@ Android Client 負責 PuriCare Mini 的 BLE 搜尋、連線、即時狀態解碼
 | UI | `MainActivity.kt` | 三分頁導覽、狀態呈現、控制確認、外觀設定 |
 | Export | `DiagnosticExport.kt` | 產生具 schema version 的 JSON 資訊檔 |
 | Feature settings | `FeaturePreferences.kt` | 保存互斥連線模式與感測器 timing |
+| Filter life | `FilterLife.kt` | 計算百分比、已用時數與提醒門檻策略 |
+| Filter notification | `FilterReminderNotifier.kt` | 管理通知頻道、權限檢查與每週期一次通知 |
 | Background | `BackgroundConnectionService.kt` | 常駐通知、維持連線與恢復上次裝置 |
 | Unit tests | `app/src/test/...` | frame、CRC、實機 fixture、狀態合併與匯出格式 |
 
@@ -68,16 +70,32 @@ Android Client 負責 PuriCare Mini 的 BLE 搜尋、連線、即時狀態解碼
 
 ## 8. 資訊匯出
 
-JSON 使用 `schemaVersion`，未取得欄位輸出 `null`。匯出由 Android Storage Access Framework 建立文件，只有使用者選定位置後才寫入；App 不要求廣泛儲存權限。
+JSON 使用 `schemaVersion`，未取得欄位輸出 `null`。schema 3 在快照加入 `filterTotal`、`filterPercent`，並在能力設定加入 `filterReminderThresholdPercent`。匯出由 Android Storage Access Framework 建立文件，只有使用者選定位置後才寫入；App 不要求廣泛儲存權限。
 
-## 9. 測試策略
+## 9. 濾網壽命與提醒
+
+計算規則：
+
+```text
+total = deviceTotal > 0 ? deviceTotal : 2000
+remaining = clamp(deviceRemaining, 0, total)
+percent = floor(remaining × 100 ÷ total)
+percent = remaining > 0 ? max(percent, 1) : 0
+used = max(total - remaining, 0)
+```
+
+提醒預設關閉。啟用時預設門檻為 10%，之後可切換為 3%、5%、10% 或 20%。每次收到 ID 853 或 ID 854 都重新計算；若百分比不高於門檻且該門檻尚未通知，建立本機通知並保存已通知門檻。百分比重新高於門檻時清除旗標，供更換濾網後的下一週期使用。
+
+Android 13 以上在啟用提醒時要求 `POST_NOTIFICATIONS`。前景連線取得讀值即可評估；若要在離開 App 後仍持續接收裝置讀值，使用者必須另外啟用背景連線。
+
+## 10. 測試策略
 
 - JVM unit tests：GET／SET frame、CRC、REPORT fixture、Battery／filter 解碼、濾網百分比與提醒策略、Auto 值、Turbo 與風量獨立性、JSON escaping 與 null。
 - Build verification：`testDebugUnitTest` 後執行 `assembleDebug` 與 `assembleRelease`，確認 R8 與資源縮減規則可用。
 - 實機驗證：掃描、連線、通知、控制 ACK、控制後狀態、版本欄位與深淺色可讀性。
 - 新增裝置回報格式時，先以去識別化 fixture 建立 regression test，再擴充 parser。
 
-## 10. 未實作項目
+## 11. 未實作項目
 
 - 開機自動恢復背景服務。
 - 歷史資料庫、圖表與雲端同步。

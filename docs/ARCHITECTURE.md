@@ -15,6 +15,8 @@ PuriCare Mini Next 在 Android 12 以上裝置直接透過 Bluetooth Low Energy 
 │ - Device info    │                      │ - GATT operation queue   │
 └──────────────────┘                      │ - frame codec            │
                                           │ - immutable UI snapshot  │
+                                          │ - filter life calculator │
+                                          │ - reminder notifier      │
                                           │ - information exporter   │
                                           │ - foreground service     │
                                           └──────────────────────────┘
@@ -40,6 +42,12 @@ Android GATT 的 descriptor、characteristic read 與 write 都是非同步操�
 
 「資訊」頁保留最近 500 筆連線記錄，並由使用者主動匯出 JSON。匯出內容包含 App／Android 版本、連線狀態、裝置資訊、目前快照及附近候選裝置；App 不會自動上傳。
 
+### Filter life and reminder
+
+`AirSnapshot` 同時保存裝置回報的濾網剩餘時數與總時數。`FilterLife` 將兩者轉為剩餘百分比、已用時數與總時數；若裝置未提供總時數，使用 2,000 小時作為相容性備援。百分比限制在 0–100%，只要剩餘時數大於零，畫面至少顯示 1%。
+
+`FilterReminderNotifier` 在收到濾網欄位後評估使用者選定的 3%、5%、10% 或 20% 門檻。達到或低於門檻時發出一次本機通知；濾網壽命回升至門檻以上後才清除已通知狀態。門檻及通知狀態保存在 App 私有偏好，不會上傳。
+
 ### Background connection
 
 使用 Android Foreground Service 與低干擾常駐通知保留共用 `BleManager`。意外斷線後採 3、6、15、30、60 秒的有限退避，嘗試連接 App 私有設定中的上次裝置；使用者主動中斷、關閉背景模式或達到上限時不再重連。
@@ -58,6 +66,7 @@ Android GATT 的 descriptor、characteristic read 與 write 都是非同步操�
                                   └─ 發送 GET ALL
                                          │
 裝置通知 → frame decoder → AirSnapshot → Compose 重組畫面
+                                      └─ 濾網壽命計算 → 門檻策略 → 本機通知
 
 使用者操作 → SET frame → GATT FIFO → 裝置 ACK／REPORT → 延遲重新整理
 ```
@@ -65,6 +74,7 @@ Android GATT 的 descriptor、characteristic read 與 write 都是非同步操�
 ## 現行邊界
 
 - 背景連線依賴 Foreground Service；各品牌省電策略仍可能中止程序。
+- 濾網提醒需要 Android 通知權限；App 未在背景維持連線時，只能在前景連線並取得新讀值後評估。
 - 沒有本機歷史資料庫或雲端同步。
 - 不執行 Firmware 更新、濾網重設或其他難以回復的裝置操作。
 - 裝置資訊只讀取 Bluetooth SIG 標準欄位；裝置未提供時不推測內容。
