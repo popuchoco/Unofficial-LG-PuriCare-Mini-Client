@@ -8,11 +8,13 @@ data class FilterLife(
     val totalHours: Int,
     val usedHours: Int,
     val percent: Int,
+    val totalFromDevice: Boolean,
 )
 
 fun AirSnapshot.filterLife(): FilterLife? {
     val remaining = filterRemaining?.coerceAtLeast(0) ?: return null
-    val total = filterTotal?.takeIf { it > 0 } ?: DEFAULT_FILTER_TOTAL_HOURS
+    val reportedTotal = filterTotal?.takeIf { it > 0 }
+    val total = reportedTotal ?: DEFAULT_FILTER_TOTAL_HOURS
     val boundedRemaining = remaining.coerceAtMost(total)
     val calculated = boundedRemaining * 100 / total
     val percent = when {
@@ -25,6 +27,7 @@ fun AirSnapshot.filterLife(): FilterLife? {
         totalHours = total,
         usedHours = (total - boundedRemaining).coerceAtLeast(0),
         percent = percent,
+        totalFromDevice = reportedTotal != null,
     )
 }
 

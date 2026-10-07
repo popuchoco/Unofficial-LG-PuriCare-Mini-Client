@@ -287,7 +287,7 @@ private fun ControlPanel(snapshot: AirSnapshot, ble: BleManager) {
                                 selected = snapshot.lightLevel == level,
                                 onClick = { ble.setLightLevel(level) },
                                 label = { Text(label.removeSuffix("%"), fontSize = 12.sp) },
-                                modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                             )
                         }
                     }
@@ -598,7 +598,11 @@ private fun InfoScreen(state: BleUiState, ble: BleManager, appTheme: AppTheme, o
             if (life != null) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("已使用 ${life.usedHours} 小時", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-                    Text("總壽命 ${life.totalHours} 小時", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    Text(
+                        if (life.totalFromDevice) "總壽命 ${life.totalHours} 小時" else "總壽命未回報，暫以 ${life.totalHours} 小時計",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp,
+                    )
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

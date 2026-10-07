@@ -14,7 +14,13 @@ class FilterLifeTest {
     }
 
     @Test fun usesStandardTotalWhenDeviceOmitsTotal() {
-        assertEquals(50, AirSnapshot(filterRemaining = 1000).filterLife()?.percent)
+        val life = AirSnapshot(filterRemaining = 1000).filterLife()
+        assertEquals(50, life?.percent)
+        assertFalse(life?.totalFromDevice ?: true)
+    }
+
+    @Test fun identifiesDeviceReportedTotal() {
+        assertTrue(AirSnapshot(filterRemaining = 1954, filterTotal = 2000).filterLife()?.totalFromDevice == true)
     }
 
     @Test fun keepsNonZeroLifeVisibleAtOnePercent() {

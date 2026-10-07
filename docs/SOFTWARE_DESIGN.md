@@ -88,6 +88,8 @@ used = max(total - remaining, 0)
 
 Android 13 以上在啟用提醒時要求 `POST_NOTIFICATIONS`。前景連線取得讀值即可評估；若要在離開 App 後仍持續接收裝置讀值，使用者必須另外啟用背景連線。
 
+若 ID 854 未回報，畫面會明示總時數來自 2,000 小時的相容性備援。門檻停用時，門檻值與已通知旗標以同一次偏好交易更新，避免程序中止造成半套狀態。
+
 ## 10. 測試策略
 
 - JVM unit tests：GET／SET frame、CRC、REPORT fixture、Battery／filter 解碼、濾網百分比與提醒策略、Auto 值、Turbo 與風量獨立性、JSON escaping 與 null。
@@ -100,3 +102,8 @@ Android 13 以上在啟用提醒時要求 `POST_NOTIFICATIONS`。前景連線取
 - 開機自動恢復背景服務。
 - 歷史資料庫、圖表與雲端同步。
 - Firmware 更新、濾網重設與裝置帳號功能。
+- Room／SQLite 歷史資料庫、transactional outbox 與外部同步 worker。
+- 受保護的唯讀 API、Home Assistant、Node-RED 與 Dashboard bridge。
+- 具有獨立授權、到期與稽核的遠端量測 Touch API。
+
+上述項目屬社群可選配的擴充方向；資料模型、介面邊界與安全要求見 [EXTENSIBILITY.md](EXTENSIBILITY.md)。

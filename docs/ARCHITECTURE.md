@@ -78,3 +78,9 @@ Android GATT 的 descriptor、characteristic read 與 write 都是非同步操�
 - 沒有本機歷史資料庫或雲端同步。
 - 不執行 Firmware 更新、濾網重設或其他難以回復的裝置操作。
 - 裝置資訊只讀取 Bluetooth SIG 標準欄位；裝置未提供時不推測內容。
+
+## 選配擴充架構（未實作）
+
+核心 App 未來可在 `AirSnapshot` 之後加入 Room／SQLite repository，於同一 transaction 寫入 observation 與 outbox event，再由獨立 worker 主動同步至使用者自架的 HTTPS bridge。外部的 Home Assistant、Node-RED、Dashboard 與研究工具只讀取 bridge 的受保護 API，不直接操作 Android GATT。
+
+遠端量測觸發另走 Touch command queue：bridge 建立具冪等鍵與到期時間的命令，手機收到後才排入單一 BLE FIFO，完成 GET ALL 後回報結果。唯讀 token 與 command token 必須分離，且所有遠端能力預設關閉。完整範圍見 [EXTENSIBILITY.md](EXTENSIBILITY.md)。

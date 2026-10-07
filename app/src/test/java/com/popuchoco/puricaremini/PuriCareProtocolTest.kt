@@ -79,7 +79,13 @@ class PuriCareProtocolTest {
     @Test fun rejectsReportWithInvalidCrc() {
         val packet = hex("04 54 4F 41 50 02 04 01 07 CD 50 13 CD 08 CC C8 35 D2")
         packet[packet.lastIndex] = (packet.last().toInt() xor 1).toByte()
+        assertEquals(false, PuriCareProtocol.hasValidCrc(packet))
         assertEquals(emptyList<PuriCareProtocol.Reading>(), PuriCareProtocol.decodeReport(packet))
+    }
+
+    @Test fun recognizesValidReportCrc() {
+        val packet = hex("04 54 4F 41 50 02 04 01 07 CD 50 13 CD 08 CC C8 35 D2")
+        assertEquals(true, PuriCareProtocol.hasValidCrc(packet))
     }
 
     @Test fun decodesRealDeviceReportWithSingleInlinePmValue() {

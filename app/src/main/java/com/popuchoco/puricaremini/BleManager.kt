@@ -64,6 +64,7 @@ class BleManager(private val context: Context) {
     private val queue = ArrayDeque<() -> Unit>()
     private var operationRunning = false
     private var operationToken = 0
+    private var pendingWriteFailure: (() -> Unit)? = null
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
@@ -167,7 +168,13 @@ class BleManager(private val context: Context) {
         }
 
         override fun onCharacteristicWrite(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
-            handler.post { log("TX complete status=$status"); completeOperation(g) }
+            handler.post {
+                if (!isCurrentConnection(gatt, g)) { log("Ignored callback from previous connection"); return@post }
+                log("TX complete status=$status")
+                if (status != BluetoothGatt.GATT_SUCCESS) pendingWriteFailure?.invoke()
+                pendingWriteFailure = null
+                completeOperation(g)
+            }
         }
 
         override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
@@ -244,6 +251,7 @@ class BleManager(private val context: Context) {
         manualDisconnect = true
         handler.removeCallbacks(reconnectRunnable)
         operationRunning = false; operationToken++; queue.clear()
+        pendingWriteFailure = null
         gatt?.disconnect()
         state = state.copy(connected = false)
     }
@@ -255,8 +263,15 @@ class BleManager(private val context: Context) {
     fun setSensorMonitoring(alwaysOn: Boolean) = writeAndRefresh(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_MONITORING, alwaysOn), "SENSOR ${if (alwaysOn) "ALWAYS" else "NORMAL"}")
     fun setLightLevel(level: Int) {
         val safeLevel = level.coerceIn(0, 4)
+        val previousLevel = state.snapshot.lightLevel
         state = state.copy(snapshot = state.snapshot.withLocalLightLevel(safeLevel))
-        writeAndRefresh(PuriCareProtocol.setByte(PuriCareProtocol.ID_LIGHT, safeLevel), "LIGHT LEVEL $safeLevel")
+        writeAndRefresh(
+            PuriCareProtocol.setByte(PuriCareProtocol.ID_LIGHT, safeLevel),
+            "LIGHT LEVEL $safeLevel",
+        ) {
+            state = state.copy(snapshot = state.snapshot.copy(lightLevel = previousLevel, updatedAt = System.currentTimeMillis()))
+            log("Light level restored after TX failure")
+        }
     }
     fun setFan(level: Int) = writeAndRefresh(PuriCareProtocol.setByte(PuriCareProtocol.ID_FAN, level), "FAN $level")
     fun setFanAuto() = writeAndRefresh(PuriCareProtocol.setByte(PuriCareProtocol.ID_FAN, 8), "FAN AUTO")
@@ -286,16 +301,18 @@ class BleManager(private val context: Context) {
         log("Nearby devices permission denied")
     }
 
-    private fun writeAndRefresh(bytes: ByteArray, label: String) {
-        write(bytes, label)
+    private fun writeAndRefresh(bytes: ByteArray, label: String, onFailure: (() -> Unit)? = null) {
+        write(bytes, label, onFailure)
         handler.removeCallbacks(refreshAfterControl)
         handler.postDelayed(refreshAfterControl, 750)
     }
 
-    private fun write(bytes: ByteArray, label: String) {
-        val g = gatt ?: return
-        val tx = g.getService(PuriCareProtocol.UART_SERVICE)?.getCharacteristic(PuriCareProtocol.UART_TX) ?: return
+    private fun write(bytes: ByteArray, label: String, onFailure: (() -> Unit)? = null) {
+        val g = gatt ?: run { onFailure?.invoke(); return }
+        val tx = g.getService(PuriCareProtocol.UART_SERVICE)?.getCharacteristic(PuriCareProtocol.UART_TX)
+            ?: run { onFailure?.invoke(); return }
         enqueue {
+            pendingWriteFailure = onFailure
             log("TX $label: ${PuriCareProtocol.hex(bytes)}")
             val started = if (Build.VERSION.SDK_INT >= 33) {
                 g.writeCharacteristic(tx, bytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothStatusCodes.SUCCESS
@@ -307,7 +324,12 @@ class BleManager(private val context: Context) {
                 @Suppress("DEPRECATION")
                 g.writeCharacteristic(tx)
             }
-            if (!started) { log("TX could not start"); completeOperation(g) }
+            if (!started) {
+                log("TX could not start")
+                pendingWriteFailure?.invoke()
+                pendingWriteFailure = null
+                completeOperation(g)
+            }
         }
     }
 
@@ -359,6 +381,8 @@ class BleManager(private val context: Context) {
                 operationRunning = false
                 operationToken++
                 queue.clear()
+                pendingWriteFailure?.invoke()
+                pendingWriteFailure = null
                 state = state.copy(phase = "裝置回應逾時，正在重新連線", connected = false)
                 gatt?.disconnect()
             }
@@ -398,7 +422,12 @@ class BleManager(private val context: Context) {
             if (decoded.any { it.id == PuriCareProtocol.ID_FILTER_REMAIN || it.id == PuriCareProtocol.ID_FILTER_TOTAL }) {
                 filterReminderNotifier.evaluate(state.snapshot)
             }
-            log("RX ${PuriCareProtocol.hex(bytes)}${if (decoded.isEmpty()) "" else " → " + decoded.joinToString { "${it.id}=${it.value}" }}")
+            val decodeNote = when {
+                bytes.size >= 11 && !PuriCareProtocol.hasValidCrc(bytes) -> " → CRC mismatch"
+                decoded.isEmpty() -> ""
+                else -> " → " + decoded.joinToString { "${it.id}=${it.value}" }
+            }
+            log("RX ${PuriCareProtocol.hex(bytes)}$decodeNote")
             }
         }
     }

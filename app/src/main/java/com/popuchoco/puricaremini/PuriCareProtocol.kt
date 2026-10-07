@@ -58,13 +58,18 @@ object PuriCareProtocol {
 
     fun hex(bytes: ByteArray): String = bytes.joinToString(" ") { "%02X".format(it.toInt() and 0xff) }
 
+    fun hasValidCrc(packet: ByteArray): Boolean {
+        if (packet.size < 2) return false
+        val expected = ((packet[packet.size - 2].toInt() and 0xff) shl 8) or (packet.last().toInt() and 0xff)
+        return crc16(packet.copyOfRange(0, packet.size - 2)) == expected
+    }
+
     data class Reading(val id: Int, val value: Int)
 
     /** Decodes device reports. Known scalar values use a 10-bit ID + 2-bit length + 4-bit inline value. */
     fun decodeReport(packet: ByteArray): List<Reading> {
         if (packet.size < 11) return emptyList()
-        val expectedCrc = ((packet[packet.size - 2].toInt() and 0xff) shl 8) or (packet.last().toInt() and 0xff)
-        if (crc16(packet.copyOfRange(0, packet.size - 2)) != expectedCrc) return emptyList()
+        if (!hasValidCrc(packet)) return emptyList()
         val addressLength = packet[0].toInt() and 0xff
         if (addressLength <= 0 || packet.size < addressLength + 7) return emptyList()
         val address = packet.copyOfRange(1, 1 + addressLength).toString(Charsets.US_ASCII)

@@ -30,8 +30,9 @@ class FeaturePreferences(context: Context) {
 
     fun setFilterReminderThreshold(threshold: Int?) {
         require(threshold == null || threshold in FILTER_REMINDER_THRESHOLDS)
-        preferences.edit().putInt(KEY_FILTER_REMINDER_THRESHOLD, threshold ?: 0).apply()
-        if (threshold == null) preferences.edit().remove(KEY_FILTER_REMINDER_SENT_THRESHOLD).apply()
+        val edit = preferences.edit().putInt(KEY_FILTER_REMINDER_THRESHOLD, threshold ?: 0)
+        if (threshold == null) edit.remove(KEY_FILTER_REMINDER_SENT_THRESHOLD)
+        edit.apply()
     }
 
     internal fun filterReminderSentThreshold(): Int? =

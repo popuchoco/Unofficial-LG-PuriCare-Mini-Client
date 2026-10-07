@@ -42,6 +42,7 @@ Android Client
 - [軟體設計](docs/SOFTWARE_DESIGN.md)
 - [功能相容性](docs/FEATURE_COMPATIBILITY.md)
 - [通訊格式](docs/PROTOCOL.md)
+- [可擴充範圍](docs/EXTENSIBILITY.md)
 
 ## 開發環境
 
@@ -85,6 +86,7 @@ Release 組建已啟用 R8 與資源縮減；正式散布前仍需設定自己�
 - 顯示 PM1.0、PM2.5、PM10、電量及濾網剩餘百分比與時數。
 - 可設定在濾網壽命剩餘 3%、5%、10% 或 20% 時提醒更換。
 - 濾網提醒預設關閉；同一濾網週期只通知一次，壽命回升後自動重設。
+- 裝置未回報濾網總時數時會明確標示，並暫以 2,000 小時計算。
 - 正確區分目前風量、Auto 與獨立 Turbo 狀態。
 - 控制後自動重新讀取裝置狀態。
 - 關閉電源前顯示二次確認，避免誤觸後無法由 App 重新喚醒。
@@ -133,6 +135,22 @@ Release 組建已啟用 R8 與資源縮減；正式散布前仍需設定自己�
 - 距離自動開關仍待更多手機、距離及裝置關機情境驗證。
 - App 不提供裝置更新功能。
 - 未簽署的 Release APK 不能直接作為正式散布版本。
+
+## 可擴充範圍
+
+目前 App 已提供 BLE 連線、GATT FIFO、結構化裝置快照與背景連線；本機歷史資料庫、transactional outbox、外部 API 與 Smart Home bridge 尚未實作，也不是既定版本承諾。開源社群可依自己的 IoT、Smart Home 或研究情境選擇擴充。
+
+| 擴充方向 | 建議新增的基礎 | 可延伸情境 |
+| --- | --- | --- |
+| 本機資料庫 | Room／SQLite、migration、保留策略 | 歷史查詢、趨勢分析、離線保存 |
+| Transactional outbox | 狀態與事件同 transaction、冪等同步 | 自架服務、可靠資料轉送 |
+| 受保護唯讀 API | HTTPS、read-only token、速率限制 | Home Assistant、Agent、研究工具 |
+| Home Assistant | RESTful sensor、MQTT bridge 或 custom integration | 空氣品質與裝置 sensor |
+| Node-RED | 結構化事件、範例 flow | 告警、跨設備規則與資料轉送 |
+| 裝置與空氣品質 Dashboard | 最新狀態與歷史查詢 API | 趨勢、多裝置與濾網檢視 |
+| 遠端量測觸發（Touch）API | 受保護命令佇列、FIFO、到期與執行回報 | 要求手機立即重新讀取狀態 |
+
+Touch 與任何具有副作用的介面必須和唯讀 API 分離，預設關閉並使用獨立權限。完整的資料模型、API 邊界、安全基線與建議實作順序見[可擴充範圍](docs/EXTENSIBILITY.md)。
 
 ## 資料與隱私
 
