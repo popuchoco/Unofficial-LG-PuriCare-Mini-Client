@@ -269,8 +269,17 @@ class BleManager(private val context: Context) {
             PuriCareProtocol.setByte(PuriCareProtocol.ID_LIGHT, safeLevel),
             "LIGHT LEVEL $safeLevel",
         ) {
-            state = state.copy(snapshot = state.snapshot.copy(lightLevel = previousLevel, updatedAt = System.currentTimeMillis()))
-            log("Light level restored after TX failure")
+            val rollbackLevel = lightLevelAfterFailedWrite(
+                currentLevel = state.snapshot.lightLevel,
+                attemptedLevel = safeLevel,
+                previousLevel = previousLevel,
+            )
+            if (rollbackLevel != state.snapshot.lightLevel) {
+                state = state.copy(snapshot = state.snapshot.copy(lightLevel = rollbackLevel, updatedAt = System.currentTimeMillis()))
+                log("Light level restored after TX failure")
+            } else {
+                log("Kept newer light level after earlier TX failure")
+            }
         }
     }
     fun setFan(level: Int) = writeAndRefresh(PuriCareProtocol.setByte(PuriCareProtocol.ID_FAN, level), "FAN $level")
@@ -458,3 +467,9 @@ class BleManager(private val context: Context) {
         handler.postDelayed(reconnectRunnable, delay)
     }
 }
+
+internal fun lightLevelAfterFailedWrite(
+    currentLevel: Int?,
+    attemptedLevel: Int,
+    previousLevel: Int?,
+): Int? = if (currentLevel == attemptedLevel) previousLevel else currentLevel

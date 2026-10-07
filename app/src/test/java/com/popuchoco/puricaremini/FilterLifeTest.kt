@@ -34,6 +34,11 @@ class FilterLifeTest {
         assertTrue(FilterReminderPolicy.shouldReset(percent = 11, threshold = 10, notifiedThreshold = 10))
     }
 
+    @Test fun failedLightWriteDoesNotOverwriteANewerSelection() {
+        assertEquals(1, lightLevelAfterFailedWrite(currentLevel = 2, attemptedLevel = 2, previousLevel = 1))
+        assertEquals(4, lightLevelAfterFailedWrite(currentLevel = 4, attemptedLevel = 2, previousLevel = 1))
+    }
+
     @Test fun acceptsOnlySupportedReminderThresholds() {
         assertFalse(FilterReminderPolicy.shouldNotify(percent = 7, threshold = 7, notifiedThreshold = null))
         FILTER_REMINDER_THRESHOLDS.forEach { threshold ->

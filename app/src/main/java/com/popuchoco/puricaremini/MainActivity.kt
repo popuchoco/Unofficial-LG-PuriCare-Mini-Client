@@ -11,7 +11,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -35,8 +37,10 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -612,18 +616,10 @@ private fun InfoScreen(state: BleUiState, ble: BleManager, appTheme: AppTheme, o
                 checked = filterReminderThreshold != null,
                 onCheckedChange = { enabled -> changeFilterReminder(if (enabled) 10 else null) },
             )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FILTER_REMINDER_THRESHOLDS.forEach { threshold ->
-                    FilterChip(
-                        selected = filterReminderThreshold == threshold,
-                        onClick = { changeFilterReminder(threshold) },
-                        enabled = filterReminderThreshold != null,
-                        label = { Text("$threshold%") },
-                        leadingIcon = if (filterReminderThreshold == threshold) {{ Icon(Icons.Filled.Check, null, Modifier.size(18.dp)) }} else null,
-                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                    )
-                }
-            }
+            FilterReminderThresholdSelector(
+                selectedThreshold = filterReminderThreshold,
+                onThresholdSelected = ::changeFilterReminder,
+            )
             Text(
                 "更換濾網後，當壽命回升至門檻以上會自動重設提醒。背景提醒需啟用背景連線。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -713,6 +709,80 @@ private fun InfoScreen(state: BleUiState, ble: BleManager, appTheme: AppTheme, o
             }
         }
         Spacer(Modifier.height(4.dp))
+    }
+}
+
+@Composable
+private fun FilterReminderThresholdSelector(
+    selectedThreshold: Int?,
+    onThresholdSelected: (Int?) -> Unit,
+) {
+    val enabled = selectedThreshold != null
+    Box(Modifier.fillMaxWidth()) {
+        HorizontalDivider(
+            modifier = Modifier.align(Alignment.TopCenter).padding(horizontal = 24.dp).padding(top = 23.dp),
+            thickness = 2.dp,
+            color = if (enabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+            else MaterialTheme.colorScheme.outlineVariant,
+        )
+        Row(Modifier.fillMaxWidth()) {
+            FILTER_REMINDER_THRESHOLDS.forEach { threshold ->
+                val selected = selectedThreshold == threshold
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .selectable(
+                                selected = selected,
+                                enabled = enabled,
+                                role = Role.RadioButton,
+                                onClick = { onThresholdSelected(threshold) },
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(
+                            Modifier
+                                .size(if (selected) 22.dp else 18.dp)
+                                .background(
+                                    color = when {
+                                        selected -> MaterialTheme.colorScheme.primary
+                                        enabled -> MaterialTheme.colorScheme.surface
+                                        else -> MaterialTheme.colorScheme.surfaceVariant
+                                    },
+                                    shape = CircleShape,
+                                )
+                                .then(
+                                    if (!selected) Modifier.border(
+                                        width = 2.dp,
+                                        color = if (enabled) MaterialTheme.colorScheme.outline
+                                        else MaterialTheme.colorScheme.outlineVariant,
+                                        shape = CircleShape,
+                                    )
+                                    else Modifier,
+                                ),
+                        )
+                        if (selected) {
+                            Box(Modifier.size(8.dp).background(MaterialTheme.colorScheme.onPrimary, CircleShape))
+                        }
+                    }
+                    Text(
+                        "$threshold%",
+                        modifier = Modifier.fillMaxWidth(),
+                        color = when {
+                            selected -> MaterialTheme.colorScheme.primary
+                            enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                        },
+                        textAlign = TextAlign.Center,
+                        fontSize = 13.sp,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                }
+            }
+        }
     }
 }
 
