@@ -108,4 +108,3 @@ Touch 與任何控制 API 都應預設關閉，使用獨立 command token、最�
 3. 自架 bridge 的 ingestion 與受保護唯讀 API。
 4. Home Assistant、Node-RED 與 Dashboard 的唯讀整合。
 5. 完成威脅模型、命令佇列與稽核後，才評估 Touch API。
-
