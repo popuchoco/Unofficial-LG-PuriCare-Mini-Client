@@ -28,7 +28,7 @@ class DiagnosticExportTest {
         assertTrue(json.contains("\"fan\": 8"))
         assertTrue(json.contains("\"turbo\": false"))
         assertTrue(json.contains("\"lightLevel\": 3"))
-        assertTrue(json.contains("\"schemaVersion\": 2"))
+        assertTrue(json.contains("\"schemaVersion\": 3"))
         assertTrue(json.contains("\"deviceVersion\": \"1.2.3\""))
         assertTrue(json.contains("\"backgroundConnectionSupported\": true"))
         assertTrue(json.contains("\"backgroundConnectionActive\": true"))
@@ -36,6 +36,22 @@ class DiagnosticExportTest {
         assertTrue(json.contains("PuriCare \\\"Mini\\\""))
         assertTrue(json.contains("RX 04 54"))
         assertFalse(json.contains("kotlin."))
+    }
+
+    @Test fun exportContainsCalculatedFilterLifeAndReminderThreshold() {
+        val state = BleUiState(snapshot = AirSnapshot(filterRemaining = 1954, filterTotal = 2000))
+        val json = DiagnosticExport.toJson(
+            state = state,
+            generatedAt = "now",
+            appVersion = "test",
+            androidVersion = "test",
+            filterReminderThreshold = 10,
+        )
+
+        assertTrue(json.contains("\"filterRemaining\": 1954"))
+        assertTrue(json.contains("\"filterTotal\": 2000"))
+        assertTrue(json.contains("\"filterPercent\": 97"))
+        assertTrue(json.contains("\"filterReminderThresholdPercent\": 10"))
     }
 
     @Test fun exportRepresentsUnavailableValuesAsNull() {

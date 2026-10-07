@@ -23,6 +23,7 @@ object PuriCareProtocol {
     const val ID_PM10 = 821
     const val ID_MONITORING = 823
     const val ID_FILTER_REMAIN = 853
+    const val ID_FILTER_TOTAL = 854
     const val ID_TURBO = 863
 
     fun getAll(): ByteArray = frame(messageType = 2, payload = field(ID_GET_ALL, 2))
@@ -117,6 +118,7 @@ data class AirSnapshot(
     val sensorAlwaysOn: Boolean? = null,
     val lightLevel: Int? = null,
     val filterRemaining: Int? = null,
+    val filterTotal: Int? = null,
     val updatedAt: Long? = null,
 )
 
@@ -135,6 +137,7 @@ fun AirSnapshot.with(readings: List<PuriCareProtocol.Reading>): AirSnapshot {
             PuriCareProtocol.ID_MONITORING -> next.copy(sensorAlwaysOn = reading.value != 0)
             PuriCareProtocol.ID_LIGHT -> next.copy(lightLevel = reading.value.coerceIn(0, 4))
             PuriCareProtocol.ID_FILTER_REMAIN -> next.copy(filterRemaining = reading.value)
+            PuriCareProtocol.ID_FILTER_TOTAL -> next.copy(filterTotal = reading.value)
             else -> next
         }
     }

@@ -427,6 +427,8 @@ private fun InfoScreen(state: BleUiState, ble: BleManager, appTheme: AppTheme, o
     var backgroundConnection by remember { mutableStateOf(featurePreferences.backgroundConnection) }
     var proximityAutoPower by remember { mutableStateOf(featurePreferences.proximityAutoPower) }
     var sensorAlwaysOn by remember { mutableStateOf(featurePreferences.sensorAlwaysOn) }
+    var filterReminderThreshold by remember { mutableStateOf(featurePreferences.filterReminderThreshold) }
+    var pendingFilterReminderThreshold by remember { mutableStateOf<Int?>(null) }
     var confirmSensorAlwaysOn by remember { mutableStateOf(false) }
     var pendingExport by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(state.snapshot.sensorAlwaysOn) {
@@ -454,6 +456,17 @@ private fun InfoScreen(state: BleUiState, ble: BleManager, appTheme: AppTheme, o
             Toast.makeText(context, "需要通知權限才能顯示背景連線狀態", Toast.LENGTH_LONG).show()
         }
     }
+    val filterNotificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val threshold = pendingFilterReminderThreshold
+        pendingFilterReminderThreshold = null
+        if (granted && threshold != null) {
+            featurePreferences.setFilterReminderThreshold(threshold)
+            filterReminderThreshold = threshold
+            ble.evaluateFilterReminder()
+        } else if (!granted) {
+            Toast.makeText(context, "需要通知權限才能顯示濾網更換提醒", Toast.LENGTH_LONG).show()
+        }
+    }
     val createDocument = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         val result = runCatching {
@@ -473,6 +486,7 @@ private fun InfoScreen(state: BleUiState, ble: BleManager, appTheme: AppTheme, o
             androidVersion = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
             backgroundConnectionActive = backgroundConnection,
             proximityAutoPowerActive = proximityAutoPower,
+            filterReminderThreshold = filterReminderThreshold,
         )
         val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.TAIWAN).format(Date())
         createDocument.launch("puricare-mini-information-$stamp.json")
@@ -511,6 +525,22 @@ private fun InfoScreen(state: BleUiState, ble: BleManager, appTheme: AppTheme, o
         if (state.connected) ble.setAuto(enabled)
     }
 
+    fun changeFilterReminder(threshold: Int?) {
+        if (threshold == null) {
+            featurePreferences.setFilterReminderThreshold(null)
+            filterReminderThreshold = null
+            return
+        }
+        if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            pendingFilterReminderThreshold = threshold
+            filterNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            featurePreferences.setFilterReminderThreshold(threshold)
+            filterReminderThreshold = threshold
+            ble.evaluateFilterReminder()
+        }
+    }
+
     if (confirmSensorAlwaysOn) {
         AlertDialog(
             onDismissRequest = { confirmSensorAlwaysOn = false },
@@ -538,6 +568,64 @@ private fun InfoScreen(state: BleUiState, ble: BleManager, appTheme: AppTheme, o
             InfoRow("名稱", state.deviceName.orUnavailable())
             InfoRow("裝置版本", state.deviceDetails.version.orUnavailable())
             InfoRow("App 版本", appVersion)
+        }
+
+        InfoCard("濾網管理") {
+            val life = state.snapshot.filterLife()
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                Column(Modifier.weight(1f)) {
+                    Text("濾網使用壽命", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                    Text(
+                        life?.let { "${it.percent}%" } ?: "—",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+                Text(
+                    life?.let { "剩餘 ${it.remainingHours} 小時" } ?: "等待裝置資料",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp,
+                )
+            }
+            LinearProgressIndicator(
+                progress = { (life?.percent ?: 0) / 100f },
+                modifier = Modifier.fillMaxWidth().height(8.dp),
+                color = if ((life?.percent ?: 100) <= (filterReminderThreshold ?: 0)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            )
+            if (life != null) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("已使用 ${life.usedHours} 小時", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    Text("總壽命 ${life.totalHours} 小時", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                }
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            SettingSwitch(
+                title = "更換濾網提醒",
+                description = "裝置連線並讀取到指定剩餘比例時通知一次。",
+                checked = filterReminderThreshold != null,
+                onCheckedChange = { enabled -> changeFilterReminder(if (enabled) 10 else null) },
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FILTER_REMINDER_THRESHOLDS.forEach { threshold ->
+                    FilterChip(
+                        selected = filterReminderThreshold == threshold,
+                        onClick = { changeFilterReminder(threshold) },
+                        enabled = filterReminderThreshold != null,
+                        label = { Text("$threshold%") },
+                        leadingIcon = if (filterReminderThreshold == threshold) {{ Icon(Icons.Filled.Check, null, Modifier.size(18.dp)) }} else null,
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    )
+                }
+            }
+            Text(
+                "更換濾網後，當壽命回升至門檻以上會自動重設提醒。背景提醒需啟用背景連線。",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp,
+                lineHeight = 17.sp,
+            )
         }
 
         InfoCard("連線能力") {

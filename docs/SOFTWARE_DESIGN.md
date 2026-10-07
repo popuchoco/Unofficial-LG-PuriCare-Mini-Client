@@ -22,7 +22,7 @@ Android Client 負責 PuriCare Mini 的 BLE 搜尋、連線、即時狀態解碼
 
 - `phase`、`scanning`、`connected`：連線流程及 UI 可用性。
 - `deviceName`、`candidates`：目前裝置與掃描候選。
-- `snapshot`：PM、電量、電源、風量、Turbo、顯示燈、濾網剩餘時數。
+- `snapshot`：PM、電量、電源、風量、Turbo、顯示燈、濾網剩餘與總時數。
 - `deviceDetails`：裝置實際提供的版本字串。
 - `logs`：最新在前，最多 500 筆的連線記錄。
 
@@ -60,6 +60,7 @@ Android Client 負責 PuriCare Mini 的 BLE 搜尋、連線、即時狀態解碼
 ## 7. UI 與互動
 
 - 總覽：主要 PM2.5 讀值、控制、其他感測值、電量與濾網時數。
+- 資訊／濾網管理：計算濾網壽命百分比，顯示剩餘、已用與總時數，並設定一次性的更換提醒門檻。
 - 裝置：搜尋、候選選擇、連線／中斷與相容性說明。
 - 資訊：裝置版本、連線能力、外觀模式、連線記錄與 JSON 匯出。
 - 互動元件至少 48 dp；狀態除色彩外也使用文字表達。
@@ -71,7 +72,7 @@ JSON 使用 `schemaVersion`，未取得欄位輸出 `null`。匯出由 Android S
 
 ## 9. 測試策略
 
-- JVM unit tests：GET／SET frame、CRC、REPORT fixture、Battery／filter 解碼、Auto 值、Turbo 與風量獨立性、JSON escaping 與 null。
+- JVM unit tests：GET／SET frame、CRC、REPORT fixture、Battery／filter 解碼、濾網百分比與提醒策略、Auto 值、Turbo 與風量獨立性、JSON escaping 與 null。
 - Build verification：`testDebugUnitTest` 後執行 `assembleDebug` 與 `assembleRelease`，確認 R8 與資源縮減規則可用。
 - 實機驗證：掃描、連線、通知、控制 ACK、控制後狀態、版本欄位與深淺色可讀性。
 - 新增裝置回報格式時，先以去識別化 fixture 建立 regression test，再擴充 parser。

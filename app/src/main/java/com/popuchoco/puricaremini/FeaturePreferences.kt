@@ -13,6 +13,8 @@ class FeaturePreferences(context: Context) {
     val backgroundConnection: Boolean get() = connectionMode == ConnectionMode.BACKGROUND
     val proximityAutoPower: Boolean get() = connectionMode == ConnectionMode.PROXIMITY_AUTO
     val sensorAlwaysOn: Boolean get() = preferences.getBoolean(KEY_SENSOR_ALWAYS_ON, false)
+    val filterReminderThreshold: Int?
+        get() = preferences.getInt(KEY_FILTER_REMINDER_THRESHOLD, 0).takeIf { it in FILTER_REMINDER_THRESHOLDS }
 
     fun setBackgroundConnection(enabled: Boolean) {
         preferences.edit().putString(KEY_CONNECTION_MODE, ConnectionModePolicy.background(enabled).name).apply()
@@ -26,9 +28,27 @@ class FeaturePreferences(context: Context) {
         preferences.edit().putBoolean(KEY_SENSOR_ALWAYS_ON, enabled).apply()
     }
 
+    fun setFilterReminderThreshold(threshold: Int?) {
+        require(threshold == null || threshold in FILTER_REMINDER_THRESHOLDS)
+        preferences.edit().putInt(KEY_FILTER_REMINDER_THRESHOLD, threshold ?: 0).apply()
+        if (threshold == null) preferences.edit().remove(KEY_FILTER_REMINDER_SENT_THRESHOLD).apply()
+    }
+
+    internal fun filterReminderSentThreshold(): Int? =
+        preferences.getInt(KEY_FILTER_REMINDER_SENT_THRESHOLD, 0).takeIf { it in FILTER_REMINDER_THRESHOLDS }
+
+    internal fun setFilterReminderSentThreshold(threshold: Int?) {
+        val edit = preferences.edit()
+        if (threshold == null) edit.remove(KEY_FILTER_REMINDER_SENT_THRESHOLD)
+        else edit.putInt(KEY_FILTER_REMINDER_SENT_THRESHOLD, threshold)
+        edit.apply()
+    }
+
     private companion object {
         const val KEY_CONNECTION_MODE = "connection_mode"
         const val KEY_SENSOR_ALWAYS_ON = "sensor_always_on"
+        const val KEY_FILTER_REMINDER_THRESHOLD = "filter_reminder_threshold"
+        const val KEY_FILTER_REMINDER_SENT_THRESHOLD = "filter_reminder_sent_threshold"
     }
 }
 

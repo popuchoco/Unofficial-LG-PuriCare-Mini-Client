@@ -102,4 +102,17 @@ class PuriCareProtocolTest {
             PuriCareProtocol.decodeReport(packet),
         )
     }
+
+    @Test fun storesFilterRemainingAndTotalHours() {
+        val snapshot = AirSnapshot().with(
+            listOf(
+                PuriCareProtocol.Reading(PuriCareProtocol.ID_FILTER_REMAIN, 1954),
+                PuriCareProtocol.Reading(PuriCareProtocol.ID_FILTER_TOTAL, 2000),
+            ),
+        )
+
+        assertEquals(1954, snapshot.filterRemaining)
+        assertEquals(2000, snapshot.filterTotal)
+        assertEquals(97, snapshot.filterLife()?.percent)
+    }
 }

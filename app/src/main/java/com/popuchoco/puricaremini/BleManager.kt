@@ -40,6 +40,7 @@ class BleManager(private val context: Context) {
     var backgroundStatusListener: ((BackgroundConnectionStatus, String) -> Unit)? = null
 
     private val handler = Handler(Looper.getMainLooper())
+    private val filterReminderNotifier = FilterReminderNotifier(context)
     private val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter
     private var gatt: BluetoothGatt? = null
     private var lastCandidate: DeviceCandidate? = null
@@ -248,6 +249,7 @@ class BleManager(private val context: Context) {
     }
 
     fun refresh() = write(PuriCareProtocol.getAll(), "GET ALL")
+    fun evaluateFilterReminder() = filterReminderNotifier.evaluate(state.snapshot)
     fun setPower(on: Boolean) = writeAndRefresh(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_POWER, on), "POWER ${if (on) "ON" else "OFF"}")
     fun setAuto(on: Boolean) = writeAndRefresh(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_AUTO, on), "AUTO ${if (on) "ON" else "OFF"}")
     fun setSensorMonitoring(alwaysOn: Boolean) = writeAndRefresh(PuriCareProtocol.setBoolean(PuriCareProtocol.ID_MONITORING, alwaysOn), "SENSOR ${if (alwaysOn) "ALWAYS" else "NORMAL"}")
@@ -393,6 +395,9 @@ class BleManager(private val context: Context) {
             val decoded = PuriCareProtocol.decodeReport(bytes)
             if (decoded.any { it.id == PuriCareProtocol.ID_BATTERY }) protocolBatterySeen = true
             state = state.copy(snapshot = state.snapshot.with(decoded))
+            if (decoded.any { it.id == PuriCareProtocol.ID_FILTER_REMAIN || it.id == PuriCareProtocol.ID_FILTER_TOTAL }) {
+                filterReminderNotifier.evaluate(state.snapshot)
+            }
             log("RX ${PuriCareProtocol.hex(bytes)}${if (decoded.isEmpty()) "" else " → " + decoded.joinToString { "${it.id}=${it.value}" }}")
             }
         }

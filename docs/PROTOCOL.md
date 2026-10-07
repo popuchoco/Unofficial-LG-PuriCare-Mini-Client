@@ -51,6 +51,7 @@
 | 821 | `IDU_PM_10_SENSOR` | PM10 |
 | 823 | `SENSOR_MONITORING` | 空氣品質感測器 timing；`0=當產品開啟時`、`1=始終開啟` |
 | 853 | `IDU_FILTER_REMAIN_TIME` | 濾網剩餘 |
+| 854 | `IDU_FILTER_TOTAL_TIME` | 濾網總壽命 |
 | 863 | `IDU_WIND_SETTING_TURBO` | Turbo |
 
 本次實機的完整狀態回報未包含 ID 590。App 送出亮度控制後保留本機狀態，直到重新建立連線；重新連線時不沿用上一段連線的亮度狀態。
