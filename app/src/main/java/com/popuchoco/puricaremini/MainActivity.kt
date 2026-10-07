@@ -38,6 +38,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -333,6 +335,11 @@ private fun ControlSwitch(icon: ImageVector, label: String, checked: Boolean, on
 
 @Composable
 private fun SnapshotGrid(snapshot: AirSnapshot) {
+    val batteryLabel = when (snapshot.batteryDisplayState()) {
+        BatteryDisplayState.CHARGING -> "電池（充電中）"
+        BatteryDisplayState.FULL -> "電池（已充滿）"
+        BatteryDisplayState.NORMAL -> "電池"
+    }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("即時資訊", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -340,7 +347,7 @@ private fun SnapshotGrid(snapshot: AirSnapshot) {
             Metric("PM10", snapshot.pm10?.toString() ?: "—", "µg/m³", Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Metric("電池", snapshot.battery?.toString() ?: "—", "%", Modifier.weight(1f))
+            Metric(batteryLabel, snapshot.batteryPercentForDisplay()?.toString() ?: "—", "%", Modifier.weight(1f))
             Metric("濾網剩餘", snapshot.filterRemaining?.toString() ?: "—", "小時", Modifier.weight(1f))
         }
     }
@@ -729,18 +736,19 @@ private fun FilterReminderThresholdSelector(
             FILTER_REMINDER_THRESHOLDS.forEach { threshold ->
                 val selected = selectedThreshold == threshold
                 Column(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .selectable(
+                            selected = selected,
+                            enabled = enabled,
+                            role = Role.RadioButton,
+                            onClick = { onThresholdSelected(threshold) },
+                        )
+                        .semantics { contentDescription = "$threshold%" },
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .selectable(
-                                selected = selected,
-                                enabled = enabled,
-                                role = Role.RadioButton,
-                                onClick = { onThresholdSelected(threshold) },
-                            ),
+                        modifier = Modifier.size(48.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Box(

@@ -434,7 +434,11 @@ class BleManager(private val context: Context) {
             val decodeNote = when {
                 bytes.size >= 11 && !PuriCareProtocol.hasValidCrc(bytes) -> " → CRC mismatch"
                 decoded.isEmpty() -> ""
-                else -> " → " + decoded.joinToString { "${it.id}=${it.value}" }
+                else -> " → " + decoded.joinToString {
+                    if (it.id == PuriCareProtocol.ID_BATTERY && it.secondaryValue != null) {
+                        "${it.id}=${it.value},charge=${it.secondaryValue}"
+                    } else "${it.id}=${it.value}"
+                }
             }
             log("RX ${PuriCareProtocol.hex(bytes)}$decodeNote")
             }

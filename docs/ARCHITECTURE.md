@@ -42,6 +42,10 @@ Android GATT 的 descriptor、characteristic read 與 write 都是非同步操�
 
 「資訊」頁保留最近 500 筆連線記錄，並由使用者主動匯出 JSON。匯出內容包含 App／Android 版本、連線狀態、裝置資訊、目前快照及附近候選裝置；App 不會自動上傳。
 
+### Battery state
+
+電池狀態優先採主狀態回報的兩個 bytes：基準電量與充電狀態。標準 Battery Level characteristic 是連線初始化時的備援來源；收到主狀態後不再覆蓋它。充電狀態為 `2` 時，畫面呈現「已充滿」與 100%，同時保留基準值供資訊匯出與問題診斷。
+
 ### Filter life and reminder
 
 `AirSnapshot` 同時保存裝置回報的濾網剩餘時數與總時數。`FilterLife` 將兩者轉為剩餘百分比、已用時數與總時數；若裝置未提供總時數，使用 2,000 小時作為相容性備援。百分比限制在 0–100%，只要剩餘時數大於零，畫面至少顯示 1%。

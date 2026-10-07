@@ -11,7 +11,7 @@ object DiagnosticExport {
         filterReminderThreshold: Int? = null,
     ): String = buildString {
         appendLine("{")
-        appendLine("  \"schemaVersion\": 3,")
+        appendLine("  \"schemaVersion\": 4,")
         appendLine("  \"generatedAt\": ${generatedAt.json()},")
         appendLine("  \"appVersion\": ${appVersion.json()},")
         appendLine("  \"androidVersion\": ${androidVersion.json()},")
@@ -34,7 +34,9 @@ object DiagnosticExport {
         appendLine("    \"pm1\": ${state.snapshot.pm1.jsonNumber()},")
         appendLine("    \"pm25\": ${state.snapshot.pm25.jsonNumber()},")
         appendLine("    \"pm10\": ${state.snapshot.pm10.jsonNumber()},")
-        appendLine("    \"battery\": ${state.snapshot.battery.jsonNumber()},")
+        appendLine("    \"battery\": ${state.snapshot.batteryPercentForDisplay().jsonNumber()},")
+        appendLine("    \"batteryRaw\": ${state.snapshot.battery.jsonNumber()},")
+        appendLine("    \"batteryChargeState\": ${state.snapshot.batteryChargeState.jsonNumber()},")
         appendLine("    \"power\": ${state.snapshot.power.jsonBoolean()},")
         appendLine("    \"fan\": ${state.snapshot.fan.jsonNumber()},")
         appendLine("    \"turbo\": ${state.snapshot.turbo.jsonBoolean()},")

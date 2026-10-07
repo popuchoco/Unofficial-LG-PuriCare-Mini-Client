@@ -64,7 +64,7 @@ object PuriCareProtocol {
         return crc16(packet.copyOfRange(0, packet.size - 2)) == expected
     }
 
-    data class Reading(val id: Int, val value: Int)
+    data class Reading(val id: Int, val value: Int, val secondaryValue: Int? = null)
 
     /** Decodes device reports. Known scalar values use a 10-bit ID + 2-bit length + 4-bit inline value. */
     fun decodeReport(packet: ByteArray): List<Reading> {
@@ -93,6 +93,7 @@ object PuriCareProtocol {
             val inline = header and 0x0f
             index += 2
             val bytes = format
+            val valueStart = index
             var value = when {
                 bytes == 0 -> inline
                 index + bytes <= end -> {
@@ -103,9 +104,12 @@ object PuriCareProtocol {
                 }
                 else -> break
             }
-            // Battery status is [levelPercent, chargeState]; the UI value is the first byte.
-            if (id == ID_BATTERY && bytes >= 1) value = packet[index - bytes].toInt() and 0xff
-            result += Reading(id, value)
+            // Battery status is [baseLevel, chargeState]. A completed charge is status 2.
+            val secondaryValue = if (id == ID_BATTERY && bytes >= 2) {
+                packet[valueStart + 1].toInt() and 0xff
+            } else null
+            if (id == ID_BATTERY && bytes >= 1) value = packet[valueStart].toInt() and 0xff
+            result += Reading(id, value, secondaryValue)
         }
         return result
     }
@@ -116,6 +120,7 @@ data class AirSnapshot(
     val pm25: Int? = null,
     val pm10: Int? = null,
     val battery: Int? = null,
+    val batteryChargeState: Int? = null,
     val power: Boolean? = null,
     val fan: Int? = null,
     val turbo: Boolean? = null,
@@ -134,7 +139,10 @@ fun AirSnapshot.with(readings: List<PuriCareProtocol.Reading>): AirSnapshot {
             PuriCareProtocol.ID_PM1 -> next.copy(pm1 = reading.value)
             PuriCareProtocol.ID_PM25 -> next.copy(pm25 = reading.value)
             PuriCareProtocol.ID_PM10 -> next.copy(pm10 = reading.value)
-            PuriCareProtocol.ID_BATTERY -> next.copy(battery = reading.value.coerceIn(0, 100))
+            PuriCareProtocol.ID_BATTERY -> next.copy(
+                battery = reading.value.coerceIn(0, 100),
+                batteryChargeState = reading.secondaryValue,
+            )
             PuriCareProtocol.ID_POWER -> next.copy(power = reading.value != 0)
             PuriCareProtocol.ID_FAN -> next.copy(fan = reading.value)
             PuriCareProtocol.ID_TURBO -> next.copy(turbo = reading.value != 0)
@@ -151,3 +159,14 @@ fun AirSnapshot.with(readings: List<PuriCareProtocol.Reading>): AirSnapshot {
 
 fun AirSnapshot.withLocalLightLevel(level: Int): AirSnapshot =
     copy(lightLevel = level.coerceIn(0, 4), updatedAt = System.currentTimeMillis())
+
+internal fun AirSnapshot.batteryPercentForDisplay(): Int? =
+    if (batteryChargeState == 2) 100 else battery
+
+internal enum class BatteryDisplayState { NORMAL, CHARGING, FULL }
+
+internal fun AirSnapshot.batteryDisplayState(): BatteryDisplayState = when (batteryChargeState) {
+    1 -> BatteryDisplayState.CHARGING
+    2 -> BatteryDisplayState.FULL
+    else -> BatteryDisplayState.NORMAL
+}

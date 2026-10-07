@@ -102,11 +102,30 @@ class PuriCareProtocolTest {
 
         assertEquals(
             listOf(
-                PuriCareProtocol.Reading(PuriCareProtocol.ID_BATTERY, 100),
+                PuriCareProtocol.Reading(PuriCareProtocol.ID_BATTERY, 100, 0),
                 PuriCareProtocol.Reading(PuriCareProtocol.ID_FILTER_REMAIN, 1000),
             ),
             PuriCareProtocol.decodeReport(packet),
         )
+    }
+
+    @Test fun decodesCompletedChargeAndDisplaysFullBattery() {
+        val packet = hex("04 54 4F 41 50 02 10 57 21 7D C1 7E 88 9B E0 50 02 28 40 CC C8 CD C0 28 80 D5 60 07 A2 D5 A0 07 D0 28 D0 4A CD 08 CD 48 D7 C0 CE EE")
+        val battery = PuriCareProtocol.decodeReport(packet).first { it.id == PuriCareProtocol.ID_BATTERY }
+        val snapshot = AirSnapshot().with(listOf(battery))
+
+        assertEquals(80, battery.value)
+        assertEquals(2, battery.secondaryValue)
+        assertEquals(80, snapshot.battery)
+        assertEquals(100, snapshot.batteryPercentForDisplay())
+        assertEquals(BatteryDisplayState.FULL, snapshot.batteryDisplayState())
+    }
+
+    @Test fun chargingStateKeepsCurrentBatteryLevel() {
+        val snapshot = AirSnapshot(battery = 80, batteryChargeState = 1)
+
+        assertEquals(BatteryDisplayState.CHARGING, snapshot.batteryDisplayState())
+        assertEquals(80, snapshot.batteryPercentForDisplay())
     }
 
     @Test fun storesFilterRemainingAndTotalHours() {

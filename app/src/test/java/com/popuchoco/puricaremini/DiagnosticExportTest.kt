@@ -28,7 +28,7 @@ class DiagnosticExportTest {
         assertTrue(json.contains("\"fan\": 8"))
         assertTrue(json.contains("\"turbo\": false"))
         assertTrue(json.contains("\"lightLevel\": 3"))
-        assertTrue(json.contains("\"schemaVersion\": 3"))
+        assertTrue(json.contains("\"schemaVersion\": 4"))
         assertTrue(json.contains("\"deviceVersion\": \"1.2.3\""))
         assertTrue(json.contains("\"backgroundConnectionSupported\": true"))
         assertTrue(json.contains("\"backgroundConnectionActive\": true"))
@@ -36,6 +36,15 @@ class DiagnosticExportTest {
         assertTrue(json.contains("PuriCare \\\"Mini\\\""))
         assertTrue(json.contains("RX 04 54"))
         assertFalse(json.contains("kotlin."))
+    }
+
+    @Test fun exportDistinguishesRawBatteryFromCompletedChargeDisplay() {
+        val state = BleUiState(snapshot = AirSnapshot(battery = 80, batteryChargeState = 2))
+        val json = DiagnosticExport.toJson(state, "now", "test", "test")
+
+        assertTrue(json.contains("\"battery\": 100"))
+        assertTrue(json.contains("\"batteryRaw\": 80"))
+        assertTrue(json.contains("\"batteryChargeState\": 2"))
     }
 
     @Test fun exportContainsCalculatedFilterLifeAndReminderThreshold() {

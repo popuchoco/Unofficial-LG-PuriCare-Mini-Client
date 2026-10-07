@@ -24,7 +24,7 @@ Android Client 負責 PuriCare Mini 的 BLE 搜尋、連線、即時狀態解碼
 
 - `phase`、`scanning`、`connected`：連線流程及 UI 可用性。
 - `deviceName`、`candidates`：目前裝置與掃描候選。
-- `snapshot`：PM、電量、電源、風量、Turbo、顯示燈、濾網剩餘與總時數。
+- `snapshot`：PM、電量基準值、充電狀態、電源、風量、Turbo、顯示燈、濾網剩餘與總時數。
 - `deviceDetails`：裝置實際提供的版本字串。
 - `logs`：最新在前，最多 500 筆的連線記錄。
 
@@ -54,7 +54,7 @@ Android Client 負責 PuriCare Mini 的 BLE 搜尋、連線、即時狀態解碼
 - 只解析 message type `04`（REPORT）與 `10`（ACK）。
 - scalar header 包含 10-bit ID、長度格式及 inline 值。
 - 多位元組整數以 big-endian 合併。
-- Battery status 的第一個資料 byte 為百分比，後續 byte 不當成電量。
+- Battery status 的第一個資料 byte 為基準電量，第二個 byte 為充電狀態；狀態 `2` 代表已充滿，即使基準值為 80，UI 仍顯示 100%。
 - 未知 ID 保留在連線記錄，但不修改已知狀態。
 
 詳細 frame 與 ID 表見 [PROTOCOL.md](PROTOCOL.md)。
@@ -70,7 +70,7 @@ Android Client 負責 PuriCare Mini 的 BLE 搜尋、連線、即時狀態解碼
 
 ## 8. 資訊匯出
 
-JSON 使用 `schemaVersion`，未取得欄位輸出 `null`。schema 3 在快照加入 `filterTotal`、`filterPercent`，並在能力設定加入 `filterReminderThresholdPercent`。匯出由 Android Storage Access Framework 建立文件，只有使用者選定位置後才寫入；App 不要求廣泛儲存權限。
+JSON 使用 `schemaVersion`，未取得欄位輸出 `null`。schema 4 同時輸出畫面電量 `battery`、裝置基準值 `batteryRaw` 與 `batteryChargeState`；既有濾網欄位與能力設定維持不變。匯出由 Android Storage Access Framework 建立文件，只有使用者選定位置後才寫入；App 不要求廣泛儲存權限。
 
 ## 9. 濾網壽命與提醒
 
@@ -84,7 +84,7 @@ percent = remaining > 0 ? max(percent, 1) : 0
 used = max(total - remaining, 0)
 ```
 
-提醒預設關閉。啟用時預設門檻為 10%，之後可在等距的四節點選擇軸切換為 3%、5%、10% 或 20%。各節點保留至少 48 dp 點擊範圍，選取狀態以固定大小的圓點呈現，不會因圖示增減造成版面位移。每次收到 ID 853 或 ID 854 都重新計算；若百分比不高於門檻且該門檻尚未通知，建立本機通知並保存已通知門檻。百分比重新高於門檻時清除旗標，供更換濾網後的下一週期使用。
+提醒預設關閉。啟用時預設門檻為 10%，之後可在等距的四節點選擇軸切換為 3%、5%、10% 或 20%。各節點與下方百分比文字構成同一個單選點擊區，保留至少 48 dp 高度並提供明確的無障礙名稱；選取狀態以固定大小的圓點呈現，不會因圖示增減造成版面位移。每次收到 ID 853 或 ID 854 都重新計算；若百分比不高於門檻且該門檻尚未通知，建立本機通知並保存已通知門檻。百分比重新高於門檻時清除旗標，供更換濾網後的下一週期使用。
 
 Android 13 以上在啟用提醒時要求 `POST_NOTIFICATIONS`。前景連線取得讀值即可評估；若要在離開 App 後仍持續接收裝置讀值，使用者必須另外啟用背景連線。
 
