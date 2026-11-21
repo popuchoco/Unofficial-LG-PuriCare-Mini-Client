@@ -66,6 +66,13 @@ app/build/outputs/apk/debug/app-debug.apk
 
 Release 組建已啟用 R8 與資源縮減；正式散布前仍需設定自己的簽署金鑰。
 
+## CI/CD 與正式發行
+
+- Pull request、推送至 `main`，或手動啟動時，GitHub Actions 會執行單元測試並組建 Debug／Release APK。
+- 推送 `v*` 標籤（例如 `v0.2.8`）會執行測試、以正式簽署金鑰組建 APK、驗證簽章，並建立 GitHub Release；含 `-` 的版本標籤會標為預先發行版。
+- 發行前請在 GitHub repository 的 **Settings → Secrets and variables → Actions** 設定 `ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`。簽署金鑰必須妥善備份；後續更新同一個 Android 套件需沿用相同金鑰。
+- 每次發行都應提高 `versionCode`；發行工作流程會以標籤名稱（去掉 `v`）設定 APK 的 `versionName`。
+
 ## 目前功能
 
 ### 功能全貌
