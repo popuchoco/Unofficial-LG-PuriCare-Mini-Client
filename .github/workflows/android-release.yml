@@ -83,4 +83,3 @@ jobs:
             args+=(--prerelease)
           fi
           gh release create "${args[@]}"
-
