@@ -1,50 +1,54 @@
 # Unofficial LG PuriCare Mini Client
 
-一套為 LG PuriCare Mini 隨身空氣清淨機設計的非官方 Android 客戶端，支援 Android 12 以上手機。
+[English](README.md) | [繁體中文](README-zh-tw.md)
 
-原廠 App 已停止維護，但既有裝置仍可繼續使用。本專案透過 Bluetooth Low Energy 直接連接裝置，讓使用者查看空氣品質、電量與濾網狀態，並控制電源、風量、Turbo、指示燈亮度及感測器運作時機，不需要 LG 帳號或雲端服務。
+An unofficial Android client for the LG PuriCare Mini portable air purifier, supporting Android 12 and later.
 
-> 本專案與 LG Electronics 無關；LG、PuriCare 及相關產品名稱與商標分屬其權利人所有。
+The original app is no longer maintained, but existing devices can still be used. This project connects to the device directly over Bluetooth Low Energy (BLE), letting you check air quality, battery and filter status, and control power, fan speed, Turbo, indicator brightness, and sensor behavior—without an LG account or cloud service.
 
-## 裝置與平台摘要
+> This project is not affiliated with LG Electronics. LG, PuriCare, and related product names and trademarks belong to their respective owners.
 
-- 支援裝置：LG PuriCare Mini。
-- 支援平台：Android 12（API 31）以上。
-- 連線方式：Bluetooth Low Energy，本機直連。
-- 帳號與網路：不需要 LG 帳號，基本功能不需要網路。
+## Device and platform
 
-## 專案狀態
+- **Supported device:** LG PuriCare Mini.
+- **Supported platform:** Android 12 (API 31) or later.
+- **Connection:** Direct Bluetooth Low Energy (BLE).
+- **Account and network:** No LG account is required; core features do not require internet access.
 
-目前為可安裝與實機操作的 alpha 測試版本。掃描、連線、即時讀值、裝置控制、資訊匯出、背景連線及深淺色外觀均已建立；不同手機的背景限制、距離自動開關及裝置關機後的行為仍持續以實機驗證。
+## Project status
 
-目前驗證重點：
+This is an installable alpha version that has been exercised with physical devices. Scanning, connection, live readings, device controls, diagnostics export, background connectivity, and light/dark themes are implemented. Behavior involving background restrictions across phone models, proximity-based automation, and device power-off scenarios is still being validated on real hardware.
 
-- Android 12 與 Android 14 的背景連線生命週期。
-- 裝置斷電後的有限退避重連與通知狀態。
-- 依 Bluetooth 連線狀態自動開關的距離與耗電表現。
+Current validation focus:
 
-## 架構
+- Background connection lifecycle on Android 12 and Android 14.
+- Bounded reconnect backoff and notification state after the device loses power.
+- Range and battery impact of automatically switching the device based on Bluetooth connection state.
+
+## Architecture
 
 ```text
 LG PuriCare Mini
       │ Bluetooth Low Energy
       ▼
 Android Client
-      ├── 掃描與連線生命週期
-      ├── GATT 操作佇列與逾時復原
-      ├── 裝置狀態解析與控制
-      ├── Foreground Service 背景連線
-      └── 本機資訊記錄與 JSON 匯出
+      ├── Scanning and connection lifecycle
+      ├── GATT operation queue and timeout recovery
+      ├── Device state parsing and controls
+      ├── Foreground service for background connectivity
+      └── Local diagnostics and JSON export
 ```
 
-- [系統架構](docs/ARCHITECTURE.md)
-- [設計決策](docs/DESIGN_DECISIONS.md)
-- [軟體設計](docs/SOFTWARE_DESIGN.md)
-- [功能相容性](docs/FEATURE_COMPATIBILITY.md)
-- [通訊格式](docs/PROTOCOL.md)
-- [可擴充範圍](docs/EXTENSIBILITY.md)
+- [System architecture](docs/ARCHITECTURE.md)
+- [Design decisions](docs/DESIGN_DECISIONS.md)
+- [Software design](docs/SOFTWARE_DESIGN.md)
+- [Feature compatibility](docs/FEATURE_COMPATIBILITY.md)
+- [Protocol](docs/PROTOCOL.md)
+- [Extensibility](docs/EXTENSIBILITY.md)
 
-## 開發環境
+## Development
+
+Requirements:
 
 - JDK 17
 - Android SDK 35
@@ -52,134 +56,140 @@ Android Client
 - Kotlin 2.0.21
 - Gradle Wrapper 8.9
 
-請先依本機環境設定 Android SDK，然後執行：
+Configure the Android SDK for your environment, then run:
+
+```bash
+./gradlew testDebugUnitTest assembleDebug assembleRelease --no-daemon
+```
+
+On Windows, use:
 
 ```powershell
 .\gradlew.bat testDebugUnitTest assembleDebug assembleRelease --no-daemon
 ```
 
-Debug APK 會產生於：
+The Debug APK is generated at:
 
 ```text
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Release 組建已啟用 R8 與資源縮減；正式散布前仍需設定自己的簽署金鑰。
+Release builds enable R8 and resource shrinking. A release APK must be signed with your own signing key before distribution.
 
-## CI/CD 與正式發行
+## CI/CD and releases
 
-- Pull request、推送至 `main`，或手動啟動時，GitHub Actions 會執行單元測試並組建 Debug／Release APK。
-- 推送 `v*` 標籤（例如 `v0.2.8`）會執行測試、以正式簽署金鑰組建 APK、驗證簽章，並建立 GitHub Release；含 `-` 的版本標籤會標為預先發行版。
-- 發行前請在 GitHub repository 的 **Settings → Secrets and variables → Actions** 設定 `ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`。簽署金鑰必須妥善備份；後續更新同一個 Android 套件需沿用相同金鑰。
-- 每次發行都應提高 `versionCode`；發行工作流程會以標籤名稱（去掉 `v`）設定 APK 的 `versionName`。
+- On pull requests, pushes to `main`, and manual runs, GitHub Actions runs unit tests and builds Debug and Release APKs.
+- Pushing a `v*` tag (for example, `v0.2.8`) runs tests, builds and verifies a signed APK, and creates a GitHub Release. Tags containing `-` are marked as pre-releases.
+- Before publishing, configure `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD` under **Settings → Secrets and variables → Actions** in the GitHub repository. Keep a secure backup of the signing key. Future updates to the same Android package must use the same key.
+- Increase `versionCode` for every release. The release workflow sets the APK `versionName` from the tag after removing its leading `v`.
 
-## 目前功能
+## Features
 
-### 功能全貌
+### Overview and device controls
 
-| 功能面 | 使用者可以完成的事 | 狀態 |
+| Area | What you can do | Status |
 | --- | --- | --- |
-| 總覽 | 查看 PM1.0、PM2.5、PM10、電量、濾網與目前風量 | 可用 |
-| 裝置連線 | 掃描、選擇及連接 PuriCare Mini | 可用 |
-| 裝置控制 | 電源、Auto、Turbo、風量、五段指示燈亮度與感測器時機 | 可用 |
-| 濾網管理 | 顯示壽命百分比與時數，設定 3%／5%／10%／20% 更換提醒 | 可用 |
-| 背景連線 | 以前景服務維持連線，斷線後有限次數重試 | 測試中 |
-| 距離自動開關 | 設定裝置依 Bluetooth 連線狀態自動開關 | 待更多實機驗證 |
-| 外觀與資訊 | 跟隨系統、淺色、深色、裝置版本與連線資訊 | 可用 |
-| 資訊匯出 | 由使用者主動匯出狀態與連線記錄 JSON | 可用 |
+| Overview | View PM1.0, PM2.5, PM10, battery, filter life, and current fan speed | Available |
+| Device connection | Scan for, select, and connect to a PuriCare Mini | Available |
+| Device controls | Power, Auto, Turbo, fan speed, five indicator brightness levels, and sensor timing | Available |
+| Filter management | View remaining life as a percentage and hours; configure replacement reminders at 3%, 5%, 10%, or 20% | Available |
+| Background connection | Maintain a connection with a foreground service and retry a limited number of times after disconnects | Testing |
+| Proximity-based automation | Automatically switch the device based on Bluetooth connection state | More real-device testing needed |
+| Appearance and information | Follow system theme or choose light/dark mode; view device version and connection information | Available |
+| Diagnostics export | User-initiated export of status and connection logs as JSON | Available |
 
-### 總覽與裝置控制
+Additional overview and control details:
 
-- 顯示 PM1.0、PM2.5、PM10、電量／充電狀態及濾網剩餘百分比與時數。
-- 可設定在濾網壽命剩餘 3%、5%、10% 或 20% 時提醒更換。
-- 濾網提醒預設關閉；同一濾網週期只通知一次，壽命回升後自動重設。
-- 裝置未回報濾網總時數時會明確標示，並暫以 2,000 小時計算。
-- 正確區分目前風量、Auto 與獨立 Turbo 狀態。
-- 控制後自動重新讀取裝置狀態。
-- 關閉電源前顯示二次確認，避免誤觸後無法由 App 重新喚醒。
-- 空氣品質感測器可設定為「當產品開啟時」或「始終開啟」。
+- View PM1.0, PM2.5, PM10, battery/charging state, and filter life as a percentage and in hours.
+- Set filter replacement reminders for 3%, 5%, 10%, or 20% remaining life.
+- Filter reminders are off by default. Each filter cycle triggers a reminder only once; an increase in remaining life resets it automatically.
+- If the device does not report total filter hours, the app says so and temporarily uses 2,000 hours for its estimate.
+- Distinguish the current fan speed, Auto, and the independent Turbo state.
+- Refresh device state automatically after a control command.
+- Ask for confirmation before powering off, reducing the chance of accidentally making the device impossible to wake from the app.
+- Set the air-quality sensor to run only while the product is on or to remain on at all times.
 
-#### 電量與充電狀態
+#### Battery and charging state
 
-裝置的主狀態會同時提供「基準電量」與「充電狀態」，兩者必須一起判讀。基準電量對應的原始級距如下：
+The device's main status reports both a **base battery level** and a **charging state**; interpret them together. The raw base-battery ranges are:
 
-| 基準電量 | 電量級距 |
+| Base battery level | Device-reported level |
 | ---: | --- |
-| 0–14% | 第 1 級（低） |
-| 15–69% | 第 2 級（中） |
-| 70–99% | 第 3 級（高） |
-| 100% | 第 4 級（滿） |
+| 0–14% | Level 1 (low) |
+| 15–69% | Level 2 (medium) |
+| 70–99% | Level 3 (high) |
+| 100% | Level 4 (full) |
 
-充電狀態 `0` 表示未充電，App 顯示裝置回報的基準電量；狀態 `1` 表示充電中，App 顯示「充電中」與目前基準電量；狀態 `2` 表示裝置已確認充滿，App 顯示「已充滿 100%」。因此裝置可能回報基準電量 80%，但在充電狀態變成 `2` 後顯示 100%；這是已充滿狀態覆蓋顯示，不是把 80% 依比例換算成 100%。資訊匯出仍會分別保留畫面電量、原始基準電量與充電狀態，方便核對。
+Charging state `0` means not charging; the app displays the reported base battery level. State `1` means charging; the app displays “Charging” along with the current base level. State `2` means the device has confirmed a full charge; the app displays “Fully charged, 100%.” For example, the device may report a base level of 80%, then report charging state `2`; the app displays 100% because the confirmed-full state overrides the display. It does not proportionally convert 80% to 100%. The diagnostics export retains the displayed battery, raw base level, and charging state separately for verification.
 
-### 裝置連線與背景運作
+### Connection and background operation
 
-- 掃描附近裝置，優先標示可能的 PuriCare Mini。
-- 連線未辨識裝置前會要求再次確認。
-- GATT 操作採序列佇列；逾時時中止該次連線，避免操作重疊。
-- 背景連線中斷後依序等待 3、6、15、30、60 秒重試，達到上限後暫停。
-- 常駐通知顯示已連線、重試中或已暫停，並可點擊回到 App。
-- 背景連線與距離自動開關互斥，開啟其中一項會關閉另一項。
+- Scan for nearby devices, with likely PuriCare Mini devices highlighted.
+- Ask for confirmation before connecting to a device that has not been identified.
+- Serialize GATT operations through a queue. On timeout, terminate that connection to prevent overlapping operations.
+- After background disconnects, retry after 3, 6, 15, 30, and 60 seconds, then pause after the retry limit is reached.
+- A persistent notification shows whether the app is connected, retrying, or paused, and can be tapped to return to the app.
+- Background connection and proximity-based automation are mutually exclusive; enabling one disables the other.
 
-### 外觀、資訊與隱私
+### Appearance, information, and privacy
 
-- 支援跟隨系統、淺色及深色模式並記住設定。
-- 顯示裝置名稱、裝置實際提供的版本及 App 版本。
-- 裝置未提供版本欄位時顯示「裝置未提供」。
-- 連線記錄只保存在記憶體中，最多保留最近 500 筆。
-- JSON 只有在使用者主動選擇位置後才會寫出。
+- Follow the system theme or select light or dark mode; the preference is remembered.
+- View the device name, version supplied by the device, and app version.
+- If the device does not provide a version field, the app says “Not provided by device.”
+- Connection logs are held in memory only, with up to the most recent 500 entries.
+- JSON is written only after the user explicitly chooses a destination.
 
-## 手機測試
+## Testing on a phone
 
-1. 關閉其他可能正在連接 PuriCare Mini 的 App。
-2. 安裝本專案產生的 Debug APK。
-3. 允許「附近裝置」權限。
-4. 前往「裝置」分頁，按下「掃描附近裝置」。
-5. 選擇 PuriCare Mini，等待狀態顯示「已連線」。
-6. 確認總覽讀值，再逐項測試風量、Auto、Turbo 與五段指示燈亮度。
-7. 如需回報問題，請在「資訊」分頁匯出 JSON，並先確認內容是否適合分享。
+1. Close any other app that may be connected to the PuriCare Mini.
+2. Install the Debug APK built from this project.
+3. Grant the Nearby devices permission.
+4. Open the **Device** tab and tap **Scan for nearby devices**.
+5. Select the PuriCare Mini and wait for the status to show **Connected**.
+6. Confirm the overview readings, then test fan speed, Auto, Turbo, and all five indicator brightness levels.
+7. To report an issue, export JSON from the **Information** tab and review it before sharing.
 
-## 疑難排解
+## Troubleshooting
 
-若遇到掃描、連線或狀態更新異常，建議依序嘗試：
+If scanning, connection, or status updates do not work as expected, try these steps in order:
 
-1. 確認 PuriCare Mini 已開機，且沒有被其他手機或 App 連接。
-2. 關閉再開啟手機 Bluetooth。
-3. 將裝置重新開機後再次掃描。
-4. 確認 App 已取得「附近裝置」權限；背景連線另需通知權限。
-5. 仍無法恢復時，匯出資訊 JSON 以便比對連線流程。
+1. Make sure the PuriCare Mini is powered on and is not connected to another phone or app.
+2. Toggle Bluetooth off and back on.
+3. Restart the device and scan again.
+4. Confirm that the app has the Nearby devices permission. Background connection also requires notification permission.
+5. If the issue persists, export the diagnostics JSON to help investigate the connection flow.
 
-## 已知限制
+## Known limitations
 
-- 背景連線可能受到各手機品牌的省電策略影響。
-- 距離自動開關仍待更多手機、距離及裝置關機情境驗證。
-- App 不提供裝置更新功能。
-- 未簽署的 Release APK 不能直接作為正式散布版本。
+- Background connectivity may be affected by power-saving policies from individual phone manufacturers.
+- Proximity-based automation still needs validation across more phones, distances, and device power-off scenarios.
+- The app does not provide device firmware updates.
+- An unsigned Release APK cannot be distributed as an official release.
 
-## 可擴充範圍
+## Extensibility
 
-目前 App 已提供 BLE 連線、GATT FIFO、結構化裝置快照與背景連線；本機歷史資料庫、transactional outbox、外部 API 與 Smart Home bridge 尚未實作，也不是既定版本承諾。開源社群可依自己的 IoT、Smart Home 或研究情境選擇擴充。
+The app currently provides BLE connectivity, a GATT FIFO queue, structured device snapshots, and background connectivity. A local history database, transactional outbox, external API, and Smart Home bridge have not been implemented and are not committed roadmap items. The open-source community can choose extensions to fit its IoT, Smart Home, or research needs.
 
-| 擴充方向 | 建議新增的基礎 | 可延伸情境 |
+| Extension area | Suggested foundation | Possible use cases |
 | --- | --- | --- |
-| 本機資料庫 | Room／SQLite、migration、保留策略 | 歷史查詢、趨勢分析、離線保存 |
-| Transactional outbox | 狀態與事件同 transaction、冪等同步 | 自架服務、可靠資料轉送 |
-| 受保護唯讀 API | HTTPS、read-only token、速率限制 | Home Assistant、Agent、研究工具 |
-| Home Assistant | RESTful sensor、MQTT bridge 或 custom integration | 空氣品質與裝置 sensor |
-| Node-RED | 結構化事件、範例 flow | 告警、跨設備規則與資料轉送 |
-| 裝置與空氣品質 Dashboard | 最新狀態與歷史查詢 API | 趨勢、多裝置與濾網檢視 |
-| 遠端量測觸發（Touch）API | 受保護命令佇列、FIFO、到期與執行回報 | 要求手機立即重新讀取狀態 |
+| Local database | Room/SQLite, migrations, retention policy | History, trend analysis, offline persistence |
+| Transactional outbox | Store state and events in one transaction; idempotent synchronization | Self-hosted services, reliable data forwarding |
+| Protected read-only API | HTTPS, read-only tokens, rate limiting | Home Assistant, agents, research tools |
+| Home Assistant | RESTful sensors, MQTT bridge, or custom integration | Air-quality and device sensors |
+| Node-RED | Structured events and example flows | Alerts, cross-device rules, and data forwarding |
+| Device and air-quality dashboard | Latest-state and history-query APIs | Trends, multiple devices, and filter status |
+| Remote measurement trigger (Touch) API | Protected command queue, FIFO, expiry, and execution status | Request an immediate state refresh on the phone |
 
-Touch 與任何具有副作用的介面必須和唯讀 API 分離，預設關閉並使用獨立權限。完整的資料模型、API 邊界、安全基線與建議實作順序見[可擴充範圍](docs/EXTENSIBILITY.md)。
+Touch and any interface with side effects must be separate from the read-only API, disabled by default, and protected with separate permissions. See [Extensibility](docs/EXTENSIBILITY.md) for the full data model, API boundaries, security baseline, and suggested implementation order.
 
-## 資料與隱私
+## Data and privacy
 
-- 預設不連線任何雲端服務。
-- 不需要位置權限，也不讀取或保存 GPS 座標。
-- 已保存的上次裝置資訊位於 App 私有設定中。
-- 匯出內容不包含裝置位址。
-- Repository 不應包含私人裝置資料、憑證或使用者匯出內容。
+- The app does not connect to cloud services by default.
+- It does not require location permission and does not read or store GPS coordinates.
+- The last saved device information is stored in the app's private preferences.
+- Exports do not include the device address.
+- Do not add private device data, credentials, or user exports to the repository.
 
 ## License
 
-本專案採用 [MIT License](LICENSE)。
+This project is licensed under the [MIT License](LICENSE).
